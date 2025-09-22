@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Amply — Book Bands Faster',
+  title: 'Amplee — Book Bands Faster',
   description: 'Bands & venues connect and confirm gigs in minutes.',
 };
 
