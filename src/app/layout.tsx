@@ -1,4 +1,5 @@
 // src/app/layout.tsx
+import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import type { Metadata } from 'next';
@@ -15,18 +16,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <AppRouterCacheProvider>
-        <body className="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
-          <div className="mx-auto max-w-6xl px-4">
-            <Header />
-            {children}
-            <footer className="py-12 text-center text-sm text-white/40">
-              © {new Date().getFullYear()} Amply — Amplify your gigs.
-            </footer>
-          </div>
+    <AppRouterCacheProvider>
+      <html>
+        <body>
+          <Header />
+          {children}
+          <Footer />
         </body>
-      </AppRouterCacheProvider>
-    </html>
+      </html>
+    </AppRouterCacheProvider>
   );
 }
