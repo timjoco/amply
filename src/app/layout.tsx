@@ -6,8 +6,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Amplee — Book Bands Faster',
-  description: 'Bands & venues connect and confirm gigs in minutes.',
+  title: 'Amplee',
+  description: 'A CRM built for musicians by musicians.',
 };
 
 export default function RootLayout({
