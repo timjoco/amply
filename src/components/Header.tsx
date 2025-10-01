@@ -46,7 +46,7 @@ export default function Header() {
               fontWeight: 500,
             }}
           >
-            Sign up
+            Login
           </Link>
         </Box>
       </Toolbar>
