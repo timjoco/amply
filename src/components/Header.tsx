@@ -36,7 +36,7 @@ export default function Header() {
           sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 2 }}
         >
           <Link
-            href="/signup"
+            href="/login"
             style={{
               textDecoration: 'none',
               backgroundColor: 'white',
@@ -47,18 +47,6 @@ export default function Header() {
             }}
           >
             Sign up
-          </Link>
-          <Link
-            href="/login"
-            style={{
-              textDecoration: 'none',
-              color: 'white',
-              padding: '6px 12px',
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: '6px',
-            }}
-          >
-            Log in
           </Link>
         </Box>
       </Toolbar>
