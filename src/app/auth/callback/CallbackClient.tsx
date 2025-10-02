@@ -1,6 +1,16 @@
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -16,8 +26,7 @@ export default function CallbackClient() {
     const run = async () => {
       const supabase = supabaseBrowser();
 
-      // With implicit flow, Supabase processes the #access_token automatically
-      // thanks to detectSessionInUrl: true. Just fetch the session:
+      // 1) Check for session
       const { data, error: sessionErr } = await supabase.auth.getSession();
       if (sessionErr) {
         if (mounted) setError(sessionErr.message);
@@ -29,7 +38,7 @@ export default function CallbackClient() {
         return;
       }
 
-      // Optional: accept invite token
+      // 2) Process invite if present
       const invite = search.get('invite');
       if (invite) {
         try {
@@ -40,18 +49,23 @@ export default function CallbackClient() {
             }
           );
           if (!res.ok) throw new Error(await res.text());
-        } catch (e) {
-          if (mounted)
-            setError(
-              e instanceof Error ? e.message : 'Invite acceptance failed'
-            );
+        } catch (err: unknown) {
+          if (mounted) {
+            const msg =
+              err instanceof Error
+                ? err.message
+                : typeof err === 'string'
+                ? err
+                : 'Invite acceptance failed';
+            setError(msg);
+          }
           // continue anyway
         }
       }
 
-      // Route based on membership
+      // 3) Route based on membership
       const { data: bands, error: bandErr } = await supabase
-        .from('band_memberships') // ← your actual table name
+        .from('band_memberships')
         .select('band_id')
         .limit(1);
 
@@ -71,18 +85,40 @@ export default function CallbackClient() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-md p-6">
-        <h1 className="text-xl font-semibold mb-2">Login error</h1>
-        <p className="text-sm text-red-600">{error}</p>
-        <button
-          className="mt-4 rounded-xl bg-black text-white p-3"
-          onClick={() => window.location.assign('/login')}
-        >
-          Back to login
-        </button>
-      </div>
+      <Container maxWidth="sm" sx={{ py: 6 }}>
+        <Paper elevation={3} sx={{ p: 3, borderRadius: 3 }}>
+          <Stack spacing={2}>
+            <Typography variant="h5" fontWeight={700}>
+              Login error
+            </Typography>
+            <Alert severity="error">{error}</Alert>
+            <Box>
+              <Button
+                variant="contained"
+                onClick={() => window.location.assign('/login')}
+              >
+                Back to login
+              </Button>
+            </Box>
+          </Stack>
+        </Paper>
+      </Container>
     );
   }
 
-  return <div className="mx-auto max-w-md p-6">Signing you in…</div>;
+  return (
+    <Container maxWidth="sm" sx={{ py: 6 }}>
+      <Paper elevation={3} sx={{ p: 3, borderRadius: 3 }}>
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress />
+          <Typography variant="h6" fontWeight={600}>
+            Signing you in…
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            This only takes a moment.
+          </Typography>
+        </Stack>
+      </Paper>
+    </Container>
+  );
 }

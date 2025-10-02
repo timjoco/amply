@@ -1,14 +1,12 @@
 import { Suspense } from 'react';
-import CallbackClient from './client';
+import CallbackClient from './CallbackClient';
 
-export const dynamic = 'force-dynamic'; // avoid prerendering issues
-// optional: export const revalidate = 0;
+// This page reads client-side search params; don't prerender.
+export const dynamic = 'force-dynamic';
 
 export default function Page() {
   return (
-    <Suspense
-      fallback={<div className="mx-auto max-w-md p-6">Signing you in…</div>}
-    >
+    <Suspense fallback={null}>
       <CallbackClient />
     </Suspense>
   );

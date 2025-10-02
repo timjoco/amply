@@ -13,7 +13,7 @@ const theme = createTheme({
       main: '#ffffff', // white for accents
     },
     background: {
-      default: '#000000', // black page background
+      default: '#200934', // plum background
       paper: '#111111', // slightly lighter for cards/app bars
     },
     text: {
