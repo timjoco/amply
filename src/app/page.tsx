@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  Box,
-  Button,
-  ButtonGroup,
-  Container,
-  Stack,
-  Typography,
-} from '@mui/material';
+import { Button, Container, Stack, Typography } from '@mui/material';
 import NextLink from 'next/link';
 
 export default function HomePage() {
@@ -31,37 +24,54 @@ export default function HomePage() {
           component="p"
           sx={{
             maxWidth: 720,
-            color: 'common.white', // forces pure white
+            color: 'common.white',
           }}
         >
           All your band’s moving parts — in one place, finally.
         </Typography>
 
-        <Box>
-          <ButtonGroup
-            orientation="horizontal"
+        {/* CTA buttons */}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={3} // more space between them
+          sx={{ pt: 4, width: '100%', justifyContent: 'center' }}
+        >
+          <Button
+            component={NextLink}
+            href="/login"
+            color="primary"
             variant="contained"
-            aria-label="primary actions"
+            size="large"
+            sx={{
+              px: 6, // make wider
+              py: 2, // make taller
+              fontSize: '1.1rem',
+              fontWeight: 600,
+              borderRadius: 3,
+            }}
           >
-            <Button
-              component={NextLink}
-              href="/login"
-              color="primary"
-              size="large"
-            >
-              Get Started
-            </Button>
-            <Button
-              component={NextLink}
-              href="/how-it-works"
-              variant="outlined"
-              color="primary"
-              size="large"
-            >
-              How It Works
-            </Button>
-          </ButtonGroup>
-        </Box>
+            Get Started
+          </Button>
+          <Button
+            component={NextLink}
+            href="/how-it-works"
+            size="large"
+            sx={{
+              px: 6,
+              py: 2,
+              fontSize: '1.1rem',
+              fontWeight: 600,
+              borderRadius: 3,
+              backgroundColor: 'white',
+              color: 'black',
+              '&:hover': {
+                backgroundColor: '#e0e0e0', // darker gray hover than pure white
+              },
+            }}
+          >
+            How It Works
+          </Button>
+        </Stack>
       </Stack>
     </Container>
   );

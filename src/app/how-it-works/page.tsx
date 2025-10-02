@@ -1,203 +1,197 @@
-// src/app/how-it-works/page.tsx
-import type { Metadata } from 'next';
-import Link from 'next/link';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'How it works — Amply',
-  description:
-    'See how bands and venues use Amply to turn availability into confirmed gigs.',
-};
+// src/app/how-it-works/page.tsx
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ForumIcon from '@mui/icons-material/Forum';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Container,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
+import Grid from '@mui/material/Grid'; // ✅ classic Grid (supports container/item)
+import NextLink from 'next/link';
 
 export default function HowItWorksPage() {
   return (
-    <main className="mx-auto max-w-5xl px-4 py-12 text-white">
-      {/* Hero */}
-      <section className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight">How it works</h1>
-        <p className="mt-3 text-white/70">
-          Amplify your gigs. Simplify your bookings. Get connected. Get booked.
-          Play the gig. Get paid.
-        </p>
-
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Link
-            href="/signup?role=band"
-            className="rounded-xl bg-white text-black px-5 py-2.5 font-medium hover:bg-white/90"
+    <Container maxWidth="lg" sx={{ py: { xs: 6, md: 10 } }}>
+      {/* HERO */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 4, md: 6 },
+          borderRadius: 3,
+          background: (t) =>
+            t.palette.mode === 'dark'
+              ? `linear-gradient(180deg, rgba(106,27,154,0.15), rgba(106,27,154,0.05))`
+              : `linear-gradient(180deg, rgba(106,27,154,0.10), rgba(106,27,154,0.03))`,
+          textAlign: 'center',
+        }}
+      >
+        <Stack spacing={2} alignItems="center">
+          <Chip
+            label="How it works"
+            color="primary"
+            variant="outlined"
+            sx={{ fontWeight: 600 }}
+          />
+          <Typography
+            variant="h3"
+            component="h1"
+            sx={{
+              fontWeight: 800,
+              letterSpacing: -0.5,
+              fontSize: { xs: '2rem', md: '3rem' },
+            }}
           >
-            I’m a Band
-          </Link>
-          <Link
-            href="/signup?role=venue"
-            className="rounded-xl border border-white/20 px-5 py-2.5 font-medium hover:bg-white/10"
+            Simplify the chaos. Amplify the music.
+          </Typography>
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            sx={{ maxWidth: 820 }}
           >
-            I’m a Venue
-          </Link>
-        </div>
-      </section>
+            Amplee puts every moving part of your band in one place: scheduling,
+            subs, chord sheets, EPKs, and a shared space to coordinate shows.
+          </Typography>
 
-      {/* Split flows */}
-      <section className="mt-14 grid gap-6 md:grid-cols-2">
-        {/* Bands */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h2 className="text-xl font-semibold">For Bands</h2>
-          <ol className="mt-4 space-y-3 text-white/80">
-            <li>
-              <span className="font-medium text-white">
-                1) Create your profile:
-              </span>{' '}
-              name, genre, city, typical draw, links to Spotify/YouTube/IG.
-            </li>
-            <li>
-              <span className="font-medium text-white">
-                2) Add availability:
-              </span>{' '}
-              choose the dates you can play.
-            </li>
-            <li>
-              <span className="font-medium text-white">
-                3) Receive requests:
-              </span>{' '}
-              venues send you booking invites for a specific date.
-            </li>
-            <li>
-              <span className="font-medium text-white">
-                4) Accept or decline:
-              </span>{' '}
-              one click confirms the show.
-            </li>
-          </ol>
-          <div className="mt-6">
-            <Link
-              href="/signup?role=band"
-              className="inline-block rounded-lg bg-white px-4 py-2 font-semibold text-black hover:bg-white/90"
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ pt: 2 }}
+          >
+            <Button
+              component={NextLink}
+              href="/login"
+              variant="contained"
+              size="large"
             >
-              Start as a Band
-            </Link>
-          </div>
-        </div>
-
-        {/* Venues */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h2 className="text-xl font-semibold">For Venues</h2>
-          <ol className="mt-4 space-y-3 text-white/80">
-            <li>
-              <span className="font-medium text-white">
-                1) Create your venue:
-              </span>{' '}
-              capacity, genre preferences, city, payout notes.
-            </li>
-            <li>
-              <span className="font-medium text-white">2) Find bands:</span>{' '}
-              filter by genre, draw, and availability.
-            </li>
-            <li>
-              <span className="font-medium text-white">3) Send a request:</span>{' '}
-              pick the date you want them to play.
-            </li>
-            <li>
-              <span className="font-medium text-white">
-                4) Get confirmation:
-              </span>{' '}
-              track status from pending to confirmed.
-            </li>
-          </ol>
-          <div className="mt-6">
-            <Link
-              href="/signup?role=venue"
-              className="inline-block rounded-lg border border-white/20 px-4 py-2 font-semibold hover:bg-white/10"
+              Get started
+            </Button>
+            <Button
+              component={NextLink}
+              href="/onboarding"
+              variant="outlined"
+              size="large"
             >
-              Start as a Venue
-            </Link>
-          </div>
-        </div>
-      </section>
+              Try the onboarding
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
 
-      {/* Timeline / simple explainer */}
-      <section className="mt-14">
-        <h3 className="text-lg font-semibold">
-          From discovery to confirmed gig
-        </h3>
-        <div className="mt-4 grid gap-4 md:grid-cols-4">
+      {/* 3-STEP WORKFLOW */}
+      <Box sx={{ mt: { xs: 6, md: 10 } }}>
+        <Typography
+          variant="h4"
+          component="h2"
+          fontWeight={800}
+          textAlign="center"
+        >
+          Your workflow in three steps
+        </Typography>
+        <Typography
+          variant="body1"
+          color="text.secondary"
+          textAlign="center"
+          sx={{ mt: 1, mb: { xs: 3, md: 6 } }}
+        >
+          From first login to first gig—here’s how Amplee slots into your
+          routine.
+        </Typography>
+
+        <Grid container spacing={3}>
           {[
             {
-              label: 'Discover',
-              desc: 'Venues find matching bands by genre, draw & city.',
+              step: '1',
+              title: 'Create your band',
+              icon: <PeopleAltIcon />,
+              points: [
+                'Name, location, genre, and logo',
+                'Invite members with one click',
+                'Assign roles: admin, editor, member',
+              ],
             },
             {
-              label: 'Request',
-              desc: 'Pick a date and send a booking invite in one click.',
+              step: '2',
+              title: 'Plan and prepare',
+              icon: <CalendarMonthIcon />,
+              points: [
+                'Add shows and rehearsals',
+                'Share chord sheets & stage plots',
+                'Collect availability and assign subs',
+              ],
             },
             {
-              label: 'Confirm',
-              desc: 'Bands accept or decline; status updates instantly.',
+              step: '3',
+              title: 'Collaborate & perform',
+              icon: <ForumIcon />,
+              points: [
+                'Central chat per event',
+                'EPK at the ready for promoters',
+                'Everyone stays on the same page',
+              ],
             },
-            {
-              label: 'Play & get paid',
-              desc: 'Show appears on both calendars. Payments come next.',
-            },
-          ].map((step) => (
-            <div
-              key={step.label}
-              className="rounded-xl border border-white/10 bg-white/5 p-4"
-            >
-              <div className="text-sm font-semibold">{step.label}</div>
-              <div className="mt-1 text-sm text-white/70">{step.desc}</div>
-            </div>
+          ].map(({ step, title, icon, points }) => (
+            // @ts-expect-error TS is complaining about Grid props but it's safe here
+            <Grid component="div" key={title} item xs={12} md={4}>
+              <Card variant="outlined" sx={{ height: '100%', borderRadius: 3 }}>
+                <CardContent>
+                  <Stack
+                    direction="row"
+                    spacing={2}
+                    alignItems="center"
+                    sx={{ mb: 1 }}
+                  >
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        display: 'grid',
+                        placeItems: 'center',
+                        backgroundColor: (t) =>
+                          t.palette.mode === 'dark'
+                            ? 'rgba(255,255,255,0.06)'
+                            : 'rgba(0,0,0,0.04)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {step}
+                    </Paper>
+                    <Typography variant="h6" fontWeight={700}>
+                      {title}
+                    </Typography>
+                    <Box sx={{ ml: 'auto', opacity: 0.8 }}>{icon}</Box>
+                  </Stack>
+                  <List dense sx={{ mt: 1 }}>
+                    {points.map((p) => (
+                      <ListItem key={p} sx={{ pl: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 34 }}>
+                          <CheckCircleIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={p} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
           ))}
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="mt-14">
-        <h3 className="text-lg font-semibold">FAQ</h3>
-        <div className="mt-4 space-y-4">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="font-medium">Is Amply free to start?</div>
-            <p className="mt-1 text-white/70 text-sm">
-              Yes. V1 focuses on getting bands and venues connected. Pricing and
-              payments will arrive in a later release.
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="font-medium">How do bookings work?</div>
-            <p className="mt-1 text-white/70 text-sm">
-              Venues send a request for a specific date. Bands accept or
-              decline. Confirmed gigs show up on both dashboards.
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="font-medium">
-              What about payments and contracts?
-            </div>
-            <p className="mt-1 text-white/70 text-sm">
-              V1 keeps it simple. Payments/contracts are on the roadmap once the
-              core matching flow is nailed.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="mt-14 text-center">
-        <h4 className="text-2xl font-semibold">Ready to amplify your gigs?</h4>
-        <p className="mt-2 text-white/70">
-          Pick your side and get set up in minutes.
-        </p>
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <Link
-            href="/signup?role=band"
-            className="rounded-xl bg-white text-black px-5 py-2.5 font-medium hover:bg-white/90"
-          >
-            I’m a Band
-          </Link>
-          <Link
-            href="/signup?role=venue"
-            className="rounded-xl border border-white/20 px-5 py-2.5 font-medium hover:bg-white/10"
-          >
-            I’m a Venue
-          </Link>
-        </div>
-      </section>
-    </main>
+        </Grid>
+      </Box>
+    </Container>
   );
 }

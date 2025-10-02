@@ -1,75 +1,60 @@
 'use client';
 
-import {
-  AppBar,
-  Box,
-  Button,
-  Container,
-  Toolbar,
-  Typography,
-} from '@mui/material';
+import { AppBar, Box, Button, Toolbar, Typography } from '@mui/material';
 import NextLink from 'next/link';
 
 export default function Header() {
   return (
     <AppBar position="static" color="primary" elevation={0}>
-      <Container maxWidth="lg">
-        <Toolbar disableGutters sx={{ display: 'flex' }}>
-          {/* Left section */}
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-            <Button
-              component={NextLink}
-              href="/"
-              color="inherit"
-              sx={{ textTransform: 'none' }}
-            >
-              Home
-            </Button>
-          </Box>
-
-          {/* Center section (brand) */}
-          <Box
-            sx={{
-              flex: 1,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
+      {/* No Container = full-width edge-to-edge */}
+      <Toolbar disableGutters sx={{ width: '100%' }}>
+        {/* 3 equal flex columns keeps brand centered even if left/right widths differ */}
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', pl: 2 }}>
+          <Button
+            component={NextLink}
+            href="/"
+            color="inherit"
+            sx={{ textTransform: 'none' }}
           >
-            <Typography
-              component={NextLink}
-              href="/"
-              variant="h6"
-              color="inherit"
-              sx={{
-                textDecoration: 'none',
-                fontWeight: 700,
-                letterSpacing: 0.5,
-              }}
-            >
-              Amplee
-            </Typography>
-          </Box>
+            Home
+          </Button>
+        </Box>
 
-          {/* Right section */}
-          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              component={NextLink}
-              href="/login"
-              variant="contained"
-              color="secondary"
-              disableElevation
-              sx={{
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 500,
-              }}
-            >
-              Login
-            </Button>
-          </Box>
-        </Toolbar>
-      </Container>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <Typography
+            component={NextLink}
+            href="/"
+            variant="h6"
+            color="inherit"
+            sx={{ textDecoration: 'none', fontWeight: 700, letterSpacing: 0.5 }}
+          >
+            Amplee
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', pr: 2 }}
+        >
+          <Button
+            component={NextLink}
+            href="/login"
+            variant="contained"
+            color="secondary"
+            disableElevation
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 500 }}
+          >
+            Login
+          </Button>
+        </Box>
+      </Toolbar>
     </AppBar>
   );
 }
