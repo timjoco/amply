@@ -16,21 +16,16 @@ export default function CallbackClient() {
     const run = async () => {
       const supabase = supabaseBrowser();
 
-      // Handle PKCE (?code=...) flow
-      const code = search.get('code');
-      if (code) {
-        const { error: exchangeErr } =
-          await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeErr) {
-          if (mounted) setError(exchangeErr.message);
-          return;
-        }
-      }
-
-      // Ensure session exists
-      const { error: sessionErr } = await supabase.auth.getSession();
+      // With implicit flow, Supabase processes the #access_token automatically
+      // thanks to detectSessionInUrl: true. Just fetch the session:
+      const { data, error: sessionErr } = await supabase.auth.getSession();
       if (sessionErr) {
         if (mounted) setError(sessionErr.message);
+        return;
+      }
+      if (!data.session) {
+        if (mounted)
+          setError('No active session found. Please try the link again.');
         return;
       }
 
@@ -54,9 +49,9 @@ export default function CallbackClient() {
         }
       }
 
-      // Route based on membership (NOTE: table name updated)
+      // Route based on membership
       const { data: bands, error: bandErr } = await supabase
-        .from('band_memberships')
+        .from('band_memberships') // ← your actual table name
         .select('band_id')
         .limit(1);
 

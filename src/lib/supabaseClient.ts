@@ -7,8 +7,8 @@ export const supabaseBrowser = (): SupabaseClient =>
     {
       auth: {
         persistSession: true,
-        detectSessionInUrl: true,
-        flowType: 'pkce',
+        detectSessionInUrl: true, // auto-reads #access_token from URL
+        flowType: 'implicit', // ← switch from 'pkce' to 'implicit'
       },
     }
   );
