@@ -1,7 +1,6 @@
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -16,14 +15,10 @@ import {
   Typography,
 } from '@mui/material';
 import CircularProgress from '@mui/material/CircularProgress';
-// If you use @mui/lab, you can swap Button for LoadingButton for nicer UX
-// import { LoadingButton } from '@mui/lab';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
 function getAppOrigin(): string {
-  // Prefer explicit public URL; fall back to window in the browser.
-  // new URL().origin normalizes trailing slashes.
   if (process.env.NEXT_PUBLIC_APP_URL) {
     try {
       return new URL(process.env.NEXT_PUBLIC_APP_URL).origin;
@@ -32,7 +27,6 @@ function getAppOrigin(): string {
     }
   }
   if (typeof window !== 'undefined') return window.location.origin;
-  // SSR fallback (won't actually be used on this page since it's a client component)
   return 'http://localhost:3000';
 }
 
@@ -42,17 +36,9 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string>('');
   const [emailError, setEmailError] = useState<string>('');
 
-  const searchParams = useSearchParams();
-  const invite = searchParams.get('invite');
-
-  const redirectTo = useMemo(() => {
-    const origin = getAppOrigin();
-    const qs = invite ? `?invite=${encodeURIComponent(invite)}` : '';
-    return `${origin}/auth/callback${qs}`;
-  }, [invite]);
+  const origin = useMemo(() => getAppOrigin(), []);
 
   const validateEmail = useCallback((val: string) => {
-    // Simple RFC5322-ish check; replace with zod/yup if you prefer
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
     setEmailError(ok ? '' : 'Enter a valid email address');
     return ok;
@@ -62,10 +48,7 @@ export default function LoginPage() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setEmail(val);
-      if (status !== 'idle') {
-        // Re-validate while user edits after an attempt
-        validateEmail(val);
-      }
+      if (status !== 'idle') validateEmail(val);
     },
     [status, validateEmail]
   );
@@ -80,6 +63,16 @@ export default function LoginPage() {
       try {
         const supabase = supabaseBrowser();
 
+        // Read invite ONLY at submit time (no useSearchParams needed)
+        const invite =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('invite')
+            : null;
+
+        const redirectTo = `${origin}/auth/callback${
+          invite ? `?invite=${encodeURIComponent(invite)}` : ''
+        }`;
+
         const { error } = await supabase.auth.signInWithOtp({
           email: email.trim(),
           options: { emailRedirectTo: redirectTo },
@@ -90,28 +83,26 @@ export default function LoginPage() {
         setMessage(
           'Check your inbox for a login link. You can request another in ~60 seconds.'
         );
-      } catch (err) {
+      } catch (err: unknown) {
         const fallback = 'Something went wrong sending your link.';
         const msg =
-          (err as { message?: string })?.message?.toString() || fallback;
+          err instanceof Error
+            ? err.message
+            : typeof err === 'string'
+            ? err
+            : fallback;
         setStatus('error');
         setMessage(msg);
       }
     },
-    [email, redirectTo, validateEmail]
+    [email, origin, validateEmail]
   );
 
   const isSending = status === 'sending';
 
   return (
     <Container maxWidth="sm" sx={{ py: { xs: 6, md: 10 } }}>
-      <Paper
-        elevation={3}
-        sx={{
-          p: { xs: 3, md: 4 },
-          borderRadius: 3,
-        }}
-      >
+      <Paper elevation={3} sx={{ p: { xs: 3, md: 4 }, borderRadius: 3 }}>
         <Stack spacing={3}>
           <Box>
             <Typography variant="h4" component="h1" gutterBottom>
@@ -164,16 +155,6 @@ export default function LoginPage() {
               >
                 {isSending ? 'Sending…' : 'Send Magic Link'}
               </Button>
-              {/* If you use @mui/lab:
-              <LoadingButton
-                type="submit"
-                size="large"
-                variant="contained"
-                fullWidth
-                loading={isSending}
-              >
-                Send Magic Link
-              </LoadingButton> */}
             </Stack>
           </Box>
 
