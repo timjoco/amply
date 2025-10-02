@@ -31,6 +31,7 @@ function getAppOrigin(): string {
 }
 
 export default function LoginPage() {
+  console.log(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState<string>('');

@@ -1,14 +1,16 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+'use client';
 
-export const supabaseBrowser = (): SupabaseClient =>
+import { createClient } from '@supabase/supabase-js';
+
+export const supabaseBrowser = () =>
   createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
         persistSession: true,
-        detectSessionInUrl: true, // auto-reads #access_token from URL
-        flowType: 'implicit', // ← switch from 'pkce' to 'implicit'
+        detectSessionInUrl: true,
+        flowType: 'implicit',
       },
     }
   );
