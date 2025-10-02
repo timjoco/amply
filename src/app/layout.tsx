@@ -1,14 +1,10 @@
-// src/app/layout.tsx
+'use client';
+
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
-import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
-import type { Metadata } from 'next';
-import './globals.css';
-
-export const metadata: Metadata = {
-  title: 'Amplee',
-  description: 'A CRM built for musicians by musicians.',
-};
+import theme from '@/theme'; // your custom MUI theme
+import { Box, Container, CssBaseline, ThemeProvider } from '@mui/material';
+import * as React from 'react';
 
 export default function RootLayout({
   children,
@@ -16,14 +12,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AppRouterCacheProvider>
-      <html>
-        <body>
-          <Header />
-          {children}
-          <Footer />
-        </body>
-      </html>
-    </AppRouterCacheProvider>
+    <html lang="en">
+      <body>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '100vh', // keep footer at bottom on short pages
+            }}
+          >
+            <Header />
+
+            <Box component="main" sx={{ flexGrow: 1 }}>
+              {/* Use a Container here if you want consistent page gutters */}
+              <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+                {children}
+              </Container>
+            </Box>
+
+            <Footer />
+          </Box>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }
