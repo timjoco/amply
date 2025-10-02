@@ -1,4 +1,4 @@
-import { Box, Container, Typography } from '@mui/material';
+import { Box, Button, Container, Typography } from '@mui/material';
 import Link from 'next/link';
 
 // src/app/page.tsx
@@ -13,18 +13,29 @@ export default function HomePage() {
         }}
       >
         <Typography variant="h2">
-          Amplify your gigs. Simplify your bookings
+          Simplify the chaos. Amplify the music
         </Typography>
       </Box>
 
       <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <Typography variant="h4">
-          Get connected. Get booked. Play the gig. Get paid.
+          All your band’s moving parts — in one place, finally.
         </Typography>
       </Box>
-      <Link href="/signup?role=band">I&apos;m a Band</Link>
-      <Link href="/signup?role=venue">I&apos;m a Venue</Link>
-      <Link href="/how-it-works">How It Works</Link>
+      <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+        <Button>
+          <Typography sx={{ padding: 1 }}>
+            <Link href="/login">Get Started</Link>
+          </Typography>
+        </Button>
+        {/* </Box>
+      <Box> */}
+        <Button>
+          <Typography sx={{ padding: 1 }}>
+            <Link href="/how-it-works">How It Works</Link>
+          </Typography>
+        </Button>
+      </Box>
     </Container>
   );
 }
