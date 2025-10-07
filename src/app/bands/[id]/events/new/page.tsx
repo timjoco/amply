@@ -1,12 +1,12 @@
-export default function BandSettingsPlaceholder({
+export default function NewEventPlaceholder({
   params,
 }: {
   params: { id: string };
 }) {
   return (
     <main style={{ padding: 24 }}>
-      <h1>Band Settings</h1>
-      <p>Settings coming soon.</p>
+      <h1>New Event</h1>
+      <p>Event creation coming soon.</p>
       <code>band id: {params.id}</code>
     </main>
   );
