@@ -1,4 +1,7 @@
+// FILE: /app/dashboard/page.tsx
 'use client';
+
+export const dynamic = 'force-dynamic';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import AddIcon from '@mui/icons-material/Add';
@@ -29,12 +32,21 @@ import {
 } from '@mui/material';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type Band = { id: string; name: string };
 
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
 export default function DashboardPage() {
-  const supabase = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -48,18 +60,23 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
         setLoading(true);
         setError(null);
 
+        // Create client in the browser (not at module scope)
+        const supabase = supabaseBrowser();
+
+        // Session check
         const { data: userData } = await supabase.auth.getUser();
         if (!userData?.user) {
           router.replace('/login');
           return;
         }
 
-        // Guard: ensure onboarded
+        // Onboarding guard
         const { data: profile, error: pErr } = await supabase
           .from('users')
           .select('first_name, email, onboarded')
@@ -71,9 +88,9 @@ export default function DashboardPage() {
         }
 
         if (mounted)
-          setGreetingName(profile?.first_name || profile?.email || 'there');
+          setGreetingName(profile.first_name || profile.email || 'there');
 
-        // Load bands via memberships
+        // Load bands via memberships (no slug dependency)
         const { data: rows, error: mErr } = await supabase
           .from('band_memberships')
           .select('bands(id, name)')
@@ -81,27 +98,38 @@ export default function DashboardPage() {
         if (mErr) throw mErr;
 
         const list: Band[] = (rows || [])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
           .map((r: any) => r.bands)
           .filter(Boolean);
         if (mounted) setBands(list);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
-        if (mounted) setError(e?.message ?? 'Failed to load dashboard');
+        if (mounted) setError(getErrorMessage(e) || 'Failed to load dashboard');
       } finally {
         if (mounted) setLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
-  }, [supabase, router]);
+  }, [router]);
 
-  const createBand = async () => {
+  const refreshBands = useCallback(async () => {
+    const supabase = supabaseBrowser();
+    const { data: rows } = await supabase
+      .from('band_memberships')
+      .select('bands(id, name)');
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    const list: Band[] = (rows || []).map((r: any) => r.bands).filter(Boolean);
+    setBands(list);
+  }, []);
+
+  const createBand = useCallback(async () => {
     if (!bandName.trim()) return;
     try {
       setCreating(true);
+      const supabase = supabaseBrowser();
       const { error } = await supabase.rpc('create_band', {
         p_name: bandName.trim(),
       });
@@ -109,23 +137,13 @@ export default function DashboardPage() {
 
       setCreateOpen(false);
       setBandName('');
-
-      // Refresh bands
-      const { data: rows } = await supabase
-        .from('band_memberships')
-        .select('bands(id, name, slug)');
-      const list: Band[] = (rows || [])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((r: any) => r.bands)
-        .filter(Boolean);
-      setBands(list);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setError(e?.message ?? 'Could not create band');
+      await refreshBands();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e) || 'Could not create band');
     } finally {
       setCreating(false);
     }
-  };
+  }, [bandName, refreshBands]);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -155,7 +173,7 @@ export default function DashboardPage() {
         {loading ? (
           <Grid container spacing={3}>
             {Array.from({ length: 4 }).map((_, i) => (
-              // @ts-expect-error TS is complaining about Grid props but it's safe here
+              // @ts-expect-error -- MUI Grid typing quirk in TS: these item/breakpoint props are valid at runtime
               <Grid item xs={12} sm={6} md={4} key={i}>
                 <Card>
                   <CardContent>
@@ -195,7 +213,7 @@ export default function DashboardPage() {
         ) : (
           <Grid container spacing={3}>
             {bands.map((b) => (
-              // @ts-expect-error TS is complaining about Grid props but it's safe here
+              // @ts-expect-error -- MUI Grid typing quirk in TS: these item/breakpoint props are valid at runtime
               <Grid item xs={12} sm={6} md={4} key={b.id}>
                 <Card
                   sx={{
