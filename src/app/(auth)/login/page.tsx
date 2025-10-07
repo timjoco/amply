@@ -186,8 +186,7 @@ export default function LoginPage() {
               Log in to Amplee
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Enter your email and we’ll send a 6-digit code (and a backup magic
-              link).
+              Enter your email and we’ll send a 6-digit code
             </Typography>
           </Box>
 
