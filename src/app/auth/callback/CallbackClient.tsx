@@ -11,7 +11,6 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import type { PostgrestError } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -64,17 +63,23 @@ export default function CallbackClient() {
       }
 
       // 3) Route based on membership
-      const { data: bands, error: bandErr } = await supabase
-        .from('band_memberships')
-        .select('band_id')
-        .limit(1);
-
-      if (bandErr) {
-        if (mounted) setError((bandErr as PostgrestError).message);
-        return;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace('/login');
       }
 
-      router.replace(!bands?.length ? '/onboarding' : '/dashboard');
+      const { data: profile } = await supabase
+        .from('users')
+        .select('onboarded')
+        .maybeSingle();
+
+      if (!profile || profile.onboarded === false) {
+        router.replace('/onboarding'); // collect name + location
+      } else {
+        router.replace('/dashboard');
+      }
     };
 
     void run();
