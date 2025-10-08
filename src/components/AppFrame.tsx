@@ -8,7 +8,7 @@ import { supabaseBrowser } from '@/lib/supabaseClient';
 import { Box } from '@mui/material';
 import { useEffect, useState } from 'react';
 
-// a frane to correcttly show headers and footers based on both auth state AND screen size
+// a frame to correctly show headers and footers based on both auth state AND screen size
 export default function AppFrame({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -31,7 +31,21 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
   const showPublicHeader = !showSideNav;
 
   return (
-    <Box sx={{ minHeight: '100dvh', display: 'flex', bgcolor: 'transparent' }}>
+    <Box
+      component="main"
+      sx={{
+        flex: 1,
+        minWidth: 0,
+        ml: { md: `${SIDE_NAV_WIDTH}px` },
+
+        // Creates a self-contained scroll area
+        height: '100dvh',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch', // smooth momentum on iOS
+        overscrollBehaviorY: 'contain', // prevent bouncing past top/bottom of this container
+        pb: { xs: '68px', md: 0 }, // keep if you use a bottom nav on mobile
+      }}
+    >
       {showSideNav ? <SideNav /> : null}
 
       <Box

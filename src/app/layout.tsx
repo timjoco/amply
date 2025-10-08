@@ -1,7 +1,6 @@
 'use client';
 
 import AppFrame from '@/components/AppFrame';
-import Footer from '@/components/Footer';
 import theme from '@/theme';
 import { Box, Container, CssBaseline, ThemeProvider } from '@mui/material';
 import * as React from 'react';
@@ -30,7 +29,7 @@ export default function RootLayout({
                 </Container>
               </Box>
 
-              <Footer />
+              {/* <Footer /> */}
             </Box>
           </ThemeProvider>
         </AppFrame>
