@@ -1,9 +1,13 @@
-'use client';
+// src/app/layout.tsx
+import AppFrame from '@/components/AppFrame'; // server wrapper that passes initialAuthed
+import EmotionRegistry from '@/components/EmotionRegistry';
+import ThemeClient from '@/components/ThemeClient'; // or your ThemeProvider+CssBaseline wrapper
+import type { Metadata } from 'next';
+import './globals.css';
 
-import AppFrame from '@/components/AppFrame';
-import theme from '@/theme';
-import { Box, Container, CssBaseline, ThemeProvider } from '@mui/material';
-import * as React from 'react';
+export const metadata: Metadata = {
+  title: 'Amplee',
+};
 
 export default function RootLayout({
   children,
@@ -13,26 +17,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppFrame>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '100vh', // keep footer at bottom on short pages
-              }}
-            >
-              <Box component="main" sx={{ flexGrow: 1 }}>
-                <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
-                  {children}
-                </Container>
-              </Box>
-
-              {/* <Footer /> */}
-            </Box>
-          </ThemeProvider>
-        </AppFrame>
+        <EmotionRegistry>
+          <ThemeClient>
+            <AppFrame>{children}</AppFrame>
+          </ThemeClient>
+        </EmotionRegistry>
       </body>
     </html>
   );

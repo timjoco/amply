@@ -40,7 +40,6 @@ export default async function HomePage() {
           All your band’s moving parts — in one place, finally.
         </Typography>
 
-        {/* CTA buttons */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={3}
