@@ -2,6 +2,7 @@
 
 import { Box, Container, Typography } from '@mui/material';
 
+// a static footer to be used on large screen sizes
 export default function Footer() {
   return (
     <Box
