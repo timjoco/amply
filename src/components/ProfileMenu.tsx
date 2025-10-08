@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 function getInitials(
@@ -33,7 +32,7 @@ function getInitials(
 
 // this component is the profile icon plus dropdown menu selection
 export default function ProfileMenu() {
-  const router = useRouter();
+  // const router = useRouter();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [loading, setLoading] = useState(true);
   const [first, setFirst] = useState<string | null>(null);
@@ -48,13 +47,15 @@ export default function ProfileMenu() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (!user) return; // not logged in (shouldn't happen on dashboard)
+        if (!user) return; //
         setEmail(user.email ?? null);
 
         const { data: profile, error } = await supabase
           .from('users')
           .select('first_name, last_name')
+          .eq('id', user.id)
           .maybeSingle();
+
         if (!mounted) return;
         if (error) throw error;
 
@@ -76,8 +77,11 @@ export default function ProfileMenu() {
 
   const signOut = async () => {
     const supabase = supabaseBrowser();
-    await supabase.auth.signOut();
-    router.replace('/login');
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      window.location.assign('/');
+    }
   };
 
   const initials = getInitials(first, last, email);
@@ -129,7 +133,7 @@ export default function ProfileMenu() {
             border: '1px solid',
             borderColor: alpha(t.palette.primary.main, 0.28),
             background:
-              'linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 1))',
+              'linear-gradient(180deg, rgba(75, 0, 130, 1), rgba(70, 4, 96, 1))',
             backdropFilter: 'blur(10px)',
           }),
         }}

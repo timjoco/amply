@@ -1,79 +1,125 @@
 'use client';
 
-import ProfileMenu from '@/components/ProfileMenu';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import { Box, Button, Skeleton } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import LogoutIcon from '@mui/icons-material/Logout';
+import SettingsIcon from '@mui/icons-material/Settings';
+import {
+  Avatar,
+  Divider,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+} from '@mui/material';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-
-type AuthState = 'loading' | 'in' | 'out';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function TopRightAccount() {
-  const [mounted, setMounted] = useState(false);
-  const [auth, setAuth] = useState<AuthState>('loading');
+  const sb = useMemo(() => supabaseBrowser(), []);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [initials, setInitials] = useState('U');
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    (async () => {
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (!user) return;
 
-  useEffect(() => {
-    if (!mounted) return;
-    const supabase = supabaseBrowser();
+      const { data: profile } = await sb
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setAuth(user ? 'in' : 'out');
-    });
+      const name =
+        [profile?.first_name, profile?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() ||
+        user.user_metadata?.name ||
+        user.email ||
+        '';
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setAuth(s?.user ? 'in' : 'out');
-    });
+      const derived =
+        name
+          .split(/\s+/)
+          .map((p: string) => p[0])
+          .filter(Boolean)
+          .slice(0, 2)
+          .join('')
+          .toUpperCase() || 'U';
 
-    return () => sub?.subscription?.unsubscribe?.();
-  }, [mounted]);
+      setInitials(derived);
+    })();
+  }, [sb]);
+
+  const open = Boolean(anchorEl);
 
   return (
-    <Box
-      aria-label="account"
-      sx={(t) => ({
-        position: 'fixed',
-        top: { xs: 10, md: 14 },
-        right: { xs: 10, md: 16 },
-        zIndex: 1200,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        borderRadius: 999,
-        border: '1px solid',
-        borderColor: alpha(t.palette.primary.main, 0.28),
-        background:
-          'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
-        backdropFilter: 'blur(8px)',
-        p: 0.5,
-      })}
-    >
-      {!mounted ? (
-        <Skeleton variant="circular" width={36} height={36} />
-      ) : auth === 'in' ? (
-        <ProfileMenu />
-      ) : (
-        <Button
-          component={Link}
-          href="/login"
-          variant="contained"
-          color="secondary"
-          size="small"
-          disableElevation
+    <>
+      <IconButton
+        onClick={(e) => setAnchorEl(e.currentTarget)}
+        aria-label="Account menu"
+        size="small"
+        sx={{
+          bgcolor: 'transparent',
+          border: (t) => `1px solid ${t.palette.primary.main}22`,
+          '&:hover': { bgcolor: 'action.hover' },
+        }}
+      >
+        <Avatar
           sx={{
-            borderRadius: 2,
-            textTransform: 'none',
-            fontWeight: 600,
-            px: 1.75,
+            width: { xs: 40, md: 44 },
+            height: { xs: 40, md: 44 },
+            fontSize: { xs: 16, md: 18 },
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            bgcolor: 'primary.main',
           }}
         >
-          Login
-        </Button>
-      )}
-    </Box>
+          {initials}
+        </Avatar>
+      </IconButton>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => setAnchorEl(null)}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        PaperProps={{
+          sx: (t) => ({
+            mt: 1,
+            minWidth: 220,
+            borderRadius: 2,
+            border: `1px solid ${t.palette.primary.main}44`,
+            backdropFilter: 'blur(8px)',
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))',
+          }),
+        }}
+      >
+        <MenuItem component={Link} href="/settings">
+          <ListItemIcon>
+            <SettingsIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Settings" />
+        </MenuItem>
+        <Divider />
+        <MenuItem
+          onClick={async () => {
+            await sb.auth.signOut();
+            setAnchorEl(null);
+          }}
+        >
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Sign out" />
+        </MenuItem>
+      </Menu>
+    </>
   );
 }

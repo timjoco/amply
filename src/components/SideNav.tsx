@@ -97,6 +97,7 @@ export default function SideNav() {
               href={href}
               startIcon={<Icon />}
               color="inherit"
+              prefetch={false}
               sx={(t) => ({
                 justifyContent: 'flex-start',
                 borderRadius: 2,
