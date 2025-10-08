@@ -1,6 +1,6 @@
 'use client';
 
-import { supabaseBrowser } from '@/lib/supabaseClient'; // make sure this path/name matches your export
+import { supabaseBrowser } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/utils/errors';
 import {
   Alert,
@@ -49,7 +49,6 @@ export default function OnboardingPage() {
 
         if (!mounted) return;
 
-        // ensure a row exists (in case the trigger wasn't set up yet)
         if (!profile) {
           const { error: upErr } = await supabase
             .from('users')

@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/how-it-works/page.tsx
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ForumIcon from '@mui/icons-material/Forum';

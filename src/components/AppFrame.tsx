@@ -1,4 +1,3 @@
-// components/AppFrame.tsx
 'use client';
 
 import BottomNav from '@/components/BottomNav';

@@ -1,4 +1,3 @@
-// components/HeaderPublic.tsx
 'use client';
 
 import { AppBar, Box, Button, Toolbar, Typography } from '@mui/material';
