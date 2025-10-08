@@ -1,9 +1,22 @@
-'use client';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
+import { supabaseServer } from '@/lib/supabaseServer';
 import { Button, Container, Stack, Typography } from '@mui/material';
-import NextLink from 'next/link';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Server-side auth check
+  const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect('/dashboard');
+  }
+
   return (
     <Container maxWidth="md" sx={{ py: { xs: 8, md: 12 } }}>
       <Stack spacing={{ xs: 3, md: 4 }} alignItems="center" textAlign="center">
@@ -22,10 +35,7 @@ export default function HomePage() {
         <Typography
           variant="h5"
           component="p"
-          sx={{
-            maxWidth: 720,
-            color: 'common.white',
-          }}
+          sx={{ maxWidth: 720, color: 'common.white' }}
         >
           All your band’s moving parts — in one place, finally.
         </Typography>
@@ -33,18 +43,18 @@ export default function HomePage() {
         {/* CTA buttons */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          spacing={3} // more space between them
+          spacing={3}
           sx={{ pt: 4, width: '100%', justifyContent: 'center' }}
         >
           <Button
-            component={NextLink}
+            component={Link}
             href="/login"
             color="primary"
             variant="contained"
             size="large"
             sx={{
-              px: 6, // make wider
-              py: 2, // make taller
+              px: 6,
+              py: 2,
               fontSize: '1.1rem',
               fontWeight: 600,
               borderRadius: 3,
@@ -53,7 +63,7 @@ export default function HomePage() {
             Get Started
           </Button>
           <Button
-            component={NextLink}
+            component={Link}
             href="/how-it-works"
             size="large"
             sx={{
@@ -64,9 +74,7 @@ export default function HomePage() {
               borderRadius: 3,
               backgroundColor: 'white',
               color: 'black',
-              '&:hover': {
-                backgroundColor: '#e0e0e0', // darker gray hover than pure white
-              },
+              '&:hover': { backgroundColor: '#e0e0e0' },
             }}
           >
             How It Works

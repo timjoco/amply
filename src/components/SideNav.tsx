@@ -9,7 +9,6 @@ import {
   Box,
   Button,
   Divider,
-  Skeleton,
   Stack,
   Tooltip,
   Typography,
@@ -19,8 +18,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-type AuthState = 'loading' | 'in' | 'out';
-
 const NAV_WIDTH = 240;
 
 const items = [
@@ -29,30 +26,27 @@ const items = [
   { href: '/events', label: 'Events', Icon: EventIcon },
 ];
 
-// side nav component is exclusively for logged in users
+// Side nav is exclusively for logged-in users
 export default function SideNav() {
   const pathname = usePathname();
-  const [auth, setAuth] = useState<AuthState>('loading');
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    let mounted = true;
     const supabase = supabaseBrowser();
+
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!mounted) return;
-      setAuth(user ? 'in' : 'out');
+      setAuthed(!!user);
     });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (!mounted) return;
-      setAuth(s?.user ? 'in' : 'out');
+      setAuthed(!!s?.user);
     });
-    return () => {
-      mounted = false;
-      sub?.subscription?.unsubscribe?.();
-    };
+
+    return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
-  // 👇 Logged out? Render nothing (no side nav on landing/marketing pages)
-  if (auth === 'out') return null;
+  // If not sure yet OR logged-out → render nothing (no flash on landing)
+  if (authed !== true) return null;
 
   return (
     <Box
@@ -74,11 +68,12 @@ export default function SideNav() {
         gap: 1.5,
       })}
     >
-      {/* Brand */}
+      {/* Brand (routes to /dashboard when logged in) */}
       <Box sx={{ px: 1, pb: 1 }}>
         <Link
-          href="/"
+          href={authed ? '/dashboard' : '/'}
           prefetch={false}
+          aria-label="Amplee Home"
           style={{ textDecoration: 'none', color: 'inherit' }}
         >
           <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
@@ -91,63 +86,53 @@ export default function SideNav() {
         sx={(t) => ({ borderColor: alpha(t.palette.primary.main, 0.18) })}
       />
 
-      {/* Loading skeleton while checking auth */}
-      {auth === 'loading' ? (
-        <Stack spacing={1} sx={{ mt: 1 }}>
-          <Skeleton variant="rounded" height={36} />
-          <Skeleton variant="rounded" height={36} />
-          <Skeleton variant="rounded" height={36} />
-        </Stack>
-      ) : (
-        <Stack spacing={0.75} sx={{ mt: 1 }}>
-          {items.map(({ href, label, Icon }) => {
-            const active = pathname?.startsWith(href);
-            return (
-              <Button
-                key={href}
-                component={Link}
-                href={href}
-                // startIcon={<Icon />}
-                color="inherit"
-                sx={(t) => ({
-                  justifyContent: 'flex-start',
-                  borderRadius: 2,
-                  px: 1.25,
-                  minHeight: 40,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  letterSpacing: 0.2,
-                  border: '1px solid',
-                  borderColor: active
-                    ? alpha(t.palette.primary.main, 0.35)
-                    : alpha(t.palette.primary.main, 0.18),
-                  backgroundColor: active
-                    ? alpha('#7C3AED', 0.12)
-                    : 'transparent',
-                  '&:hover': {
-                    backgroundColor: alpha('#7C3AED', 0.08),
-                    borderColor: alpha(t.palette.primary.main, 0.35),
-                  },
-                  '& .MuiButton-startIcon': { mr: 1 },
-                })}
-              >
-                {label}
-              </Button>
-            );
-          })}
-        </Stack>
-      )}
+      {/* Primary nav */}
+      <Stack spacing={0.75} sx={{ mt: 1 }}>
+        {items.map(({ href, label, Icon }) => {
+          const active = pathname?.startsWith(href);
+          return (
+            <Button
+              key={href}
+              component={Link}
+              href={href}
+              startIcon={<Icon />}
+              color="inherit"
+              sx={(t) => ({
+                justifyContent: 'flex-start',
+                borderRadius: 2,
+                px: 1.25,
+                minHeight: 40,
+                textTransform: 'none',
+                fontWeight: 600,
+                letterSpacing: 0.2,
+                border: '1px solid',
+                borderColor: active
+                  ? alpha(t.palette.primary.main, 0.35)
+                  : alpha(t.palette.primary.main, 0.18),
+                backgroundColor: active
+                  ? alpha('#7C3AED', 0.12)
+                  : 'transparent',
+                '&:hover': {
+                  backgroundColor: alpha('#7C3AED', 0.08),
+                  borderColor: alpha(t.palette.primary.main, 0.35),
+                },
+                '& .MuiButton-startIcon': { mr: 1 },
+              })}
+            >
+              {label}
+            </Button>
+          );
+        })}
+      </Stack>
 
       <Box sx={{ flex: 1 }} />
 
-      {/* Bottom: profile when logged in */}
-      {auth === 'in' && (
-        <Tooltip title="Account">
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', px: 0.5 }}>
-            <ProfileMenu />
-          </Box>
-        </Tooltip>
-      )}
+      {/* Bottom: profile */}
+      <Tooltip title="Account">
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start', px: 0.5 }}>
+          <ProfileMenu />
+        </Box>
+      </Tooltip>
     </Box>
   );
 }
