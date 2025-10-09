@@ -22,12 +22,11 @@ export default function RolePill({ role, size = 'small' }: Props) {
       size={size}
       label={role.toUpperCase()}
       sx={(t) => ({
-        // Common pill look
         fontWeight: 800,
         letterSpacing: 0.6,
         borderRadius: 999,
         px: 1.25,
-        // Admin = neon, Member = subtle
+        // Admin
         ...(isAdmin
           ? {
               color: '#fff',
@@ -35,7 +34,7 @@ export default function RolePill({ role, size = 'small' }: Props) {
                 'linear-gradient(135deg, #7C3AED 0%, #A855F7 50%, #7C3AED 100%)',
               backgroundSize: '200% 100%',
               border: `1px solid ${alpha(t.palette.primary.main, 0.55)}`,
-              // layered inner + outer glows
+
               boxShadow: `
                 inset 0 0 10px ${alpha('#A855F7', 0.45)},
                 0 0 12px ${alpha('#7C3AED', 0.55)},
@@ -43,7 +42,7 @@ export default function RolePill({ role, size = 'small' }: Props) {
               `,
               position: 'relative',
               overflow: 'visible',
-              // soft animated halo
+
               '&::after': {
                 content: '""',
                 position: 'absolute',
@@ -56,7 +55,7 @@ export default function RolePill({ role, size = 'small' }: Props) {
                 animation: `${pulse} 2.8s ease-in-out infinite`,
                 pointerEvents: 'none',
               },
-              // subtle shimmer on hover
+
               transition: 'background-position .4s ease, box-shadow .2s ease',
               '&:hover': {
                 backgroundPosition: '100% 0%',
@@ -68,7 +67,7 @@ export default function RolePill({ role, size = 'small' }: Props) {
               },
             }
           : {
-              // MEMBER – low-contrast pill (no glow)
+              // MEMBER
               color: alpha('#fff', 0.9),
               backgroundColor: alpha('#A855F7', 0.1),
               border: `1px solid ${alpha(t.palette.primary.main, 0.28)}`,

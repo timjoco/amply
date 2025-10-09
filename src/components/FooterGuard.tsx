@@ -16,7 +16,6 @@ export default function FooterGuard() {
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
-  // Hide footer while checking (prevents flicker) and when authed
   if (authed !== false) return null;
   return <Footer />;
 }

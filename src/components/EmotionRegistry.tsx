@@ -10,7 +10,6 @@ export default function EmotionRegistry({
 }: {
   children: React.ReactNode;
 }) {
-  // Single shared cache per request on server, and per tab on client
   const [cache] = React.useState(() => {
     const c = createCache({ key: 'mui', prepend: true });
     c.compat = true;

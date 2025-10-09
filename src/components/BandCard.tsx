@@ -13,12 +13,11 @@ import RolePill from './RolePill';
 type Props = {
   id: string;
   name: string;
-  bandRole?: string; // incoming may be any string; we’ll normalize
+  bandRole?: string;
   height?: number;
 };
 
 export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
-  // normalize to the union RolePill expects
   const normalizedRole: 'admin' | 'member' =
     (bandRole ?? '').toLowerCase() === 'admin' ? 'admin' : 'member';
 
@@ -39,8 +38,6 @@ export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
         },
       }}
     >
-      {/* CardActionArea renders a <button> under the hood with Link semantics.
-         Avoid nesting any <button> children inside to prevent button-in-button errors. */}
       <CardActionArea
         component={Link}
         href={`/bands/${id}`}

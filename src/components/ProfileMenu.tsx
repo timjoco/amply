@@ -30,7 +30,6 @@ function getInitials(
   return e ? e[0]?.toUpperCase() : '?';
 }
 
-// this component is the profile icon plus dropdown menu selection
 export default function ProfileMenu() {
   // const router = useRouter();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);

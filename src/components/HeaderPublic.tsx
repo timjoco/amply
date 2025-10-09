@@ -19,7 +19,6 @@ export default function HeaderPublic() {
       })}
     >
       <Toolbar disableGutters sx={{ width: '100%', px: 2 }}>
-        {/* Brand: logo + wordmark */}
         <Link
           href="/"
           prefetch={false}
@@ -30,7 +29,7 @@ export default function HeaderPublic() {
             sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pr: 0.5 }}
           >
             <Image
-              src="/logo.png" // or /amplee-mark.svg
+              src="/logo.png"
               alt="Amplee"
               width={28}
               height={28}

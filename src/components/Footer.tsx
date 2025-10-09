@@ -1,7 +1,6 @@
-// components/Footer.tsx
 import FacebookIcon from '@mui/icons-material/Facebook';
 import InstagramIcon from '@mui/icons-material/Instagram';
-import MusicNoteIcon from '@mui/icons-material/MusicNote'; // placeholder for TikTok, swap if you have one
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import XIcon from '@mui/icons-material/X';
 import YouTubeIcon from '@mui/icons-material/YouTube';
 import {
@@ -58,8 +57,7 @@ const sections = [
 ];
 
 export default function Footer() {
-  const year = new Date().getFullYear(); // if you ever see hydration issues, pass this from a server component
-
+  const year = new Date().getFullYear();
   return (
     <Box
       component="footer"
@@ -216,7 +214,7 @@ export default function Footer() {
           <Typography component={Link} href="/contact" variant="caption">
             Contact
           </Typography>
-          {/* Stub language picker (replace later with <Select/>) */}
+
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             English — English (US)
           </Typography>
