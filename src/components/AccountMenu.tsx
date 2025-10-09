@@ -1,11 +1,11 @@
+// components/AccountMenu.tsx
 'use client';
-
+import AccountAvatar from '@/components/AccountAvatar';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import DashboardIcon from '@mui/icons-material/SpaceDashboard';
 import {
-  Avatar,
   Box,
   IconButton,
   ListItemIcon,
@@ -23,6 +23,9 @@ type Props = {
   size?: number;
   onSignedOut?: () => void;
   hideDashboardItem?: boolean;
+  anchorEl?: HTMLElement | null;
+  open?: boolean;
+  onClose?: () => void;
 };
 
 function initialsFrom(
@@ -41,14 +44,28 @@ export default function AccountMenu({
   size = 40,
   onSignedOut,
   hideDashboardItem,
+  anchorEl: controlledAnchorEl,
+  open: controlledOpen,
+  onClose: controlledOnClose,
 }: Props) {
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  // profile state
   const [first, setFirst] = useState<string | null>(null);
   const [last, setLast] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // uncontrolled trigger state (desktop/header usage)
+  const [internalAnchor, setInternalAnchor] = useState<HTMLElement | null>(
+    null
+  );
+
+  // decide which anchor/open/close we’re using
+  const menuAnchorEl = controlledAnchorEl ?? internalAnchor;
+  const menuOpen = controlledOpen ?? Boolean(internalAnchor);
+  const closeMenu = controlledOnClose ?? (() => setInternalAnchor(null));
 
   useEffect(() => {
     let alive = true;
@@ -86,53 +103,39 @@ export default function AccountMenu({
   };
 
   const initials = initialsFrom(first, last, email);
-  const open = Boolean(anchorEl);
+
+  const isControlled = controlledAnchorEl !== undefined;
 
   return (
     <>
-      <Tooltip
-        title={loading ? 'Loading…' : first || last || email || 'Account'}
-      >
-        <Box>
-          <IconButton
-            onClick={(e) => setAnchorEl(e.currentTarget)}
-            aria-label="account menu"
-            size="small"
-            sx={{
-              bgcolor: 'transparent',
-              border: (t) => `1px solid ${alpha(t.palette.primary.main, 0.35)}`,
-              '&:hover': { bgcolor: 'action.hover' },
-              borderRadius: 999,
-              p: 0.5,
-            }}
-          >
-            <Avatar
-              sx={(t) => ({
-                width: size,
-                height: size,
-                fontWeight: 800,
-                fontSize: Math.max(12, Math.round(size * 0.38)),
-                color: '#fff',
-                border: '1px solid',
-                borderColor: alpha(t.palette.primary.main, 0.45),
-                background:
-                  'radial-gradient(120px 120px at 30% 20%, rgba(168,85,247,0.8), rgba(124,58,237,0.9))',
-                boxShadow: `0 0 0 1px ${alpha(
-                  t.palette.primary.main,
-                  0.12
-                )}, 0 6px 16px rgba(0,0,0,.35)`,
-              })}
+      {!isControlled && (
+        <Tooltip
+          title={loading ? 'Loading…' : first || last || email || 'Account'}
+        >
+          <Box>
+            <IconButton
+              onClick={(e) => setInternalAnchor(e.currentTarget)}
+              aria-label="account menu"
+              size="small"
+              sx={{
+                bgcolor: 'transparent',
+                border: (t) =>
+                  `1px solid ${alpha(t.palette.primary.main, 0.35)}`,
+                '&:hover': { bgcolor: 'action.hover' },
+                borderRadius: 999,
+                p: 0.5,
+              }}
             >
-              {initials}
-            </Avatar>
-          </IconButton>
-        </Box>
-      </Tooltip>
+              <AccountAvatar size={size}>{initials}</AccountAvatar>
+            </IconButton>
+          </Box>
+        </Tooltip>
+      )}
 
       <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={() => setAnchorEl(null)}
+        anchorEl={menuAnchorEl}
+        open={menuOpen}
+        onClose={closeMenu}
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         PaperProps={{
@@ -148,22 +151,14 @@ export default function AccountMenu({
         }}
       >
         {!hideDashboardItem && (
-          <MenuItem
-            component={Link}
-            href="/dashboard"
-            onClick={() => setAnchorEl(null)}
-          >
+          <MenuItem component={Link} href="/dashboard" onClick={closeMenu}>
             <ListItemIcon>
               <DashboardIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText primary="Dashboard" />
           </MenuItem>
         )}
-        <MenuItem
-          component={Link}
-          href="/settings"
-          onClick={() => setAnchorEl(null)}
-        >
+        <MenuItem component={Link} href="/settings" onClick={closeMenu}>
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
@@ -171,7 +166,7 @@ export default function AccountMenu({
         </MenuItem>
         <MenuItem
           onClick={async () => {
-            setAnchorEl(null);
+            closeMenu();
             await handleSignOut();
           }}
         >

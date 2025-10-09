@@ -1,87 +1,92 @@
 'use client';
 
+import AccountAvatar from '@/components/AccountAvatar';
+import AccountMenu from '@/components/AccountMenu';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import EventIcon from '@mui/icons-material/EventOutlined';
-import LibraryMusicIcon from '@mui/icons-material/LibraryMusicOutlined';
-import LoginIcon from '@mui/icons-material/Login';
-import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
+import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
+import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import LibraryMusicOutlinedIcon from '@mui/icons-material/LibraryMusicOutlined';
 import { BottomNavigation, BottomNavigationAction, Paper } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
-type AuthState = 'loading' | 'in' | 'out';
-
-// this component is being used on small screen sizes only!!
 export default function BottomNav() {
   const router = useRouter();
-  const pathname = usePathname();
-  const [auth, setAuth] = useState<AuthState>('loading');
+  const sb = useMemo(() => supabaseBrowser(), []);
+  const [initials, setInitials] = useState('U');
+  const [acctAnchor, setAcctAnchor] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    const supabase = supabaseBrowser();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!mounted) return;
-      setAuth(user ? 'in' : 'out');
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (!mounted) return;
-      setAuth(s?.user ? 'in' : 'out');
-    });
-    return () => {
-      mounted = false;
-      sub?.subscription?.unsubscribe?.();
-    };
-  }, []);
+    (async () => {
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await sb
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .maybeSingle();
 
-  const tabs = useMemo(() => {
-    if (auth !== 'in') {
-      return [{ href: '/login', label: 'Login', icon: <LoginIcon /> }];
-    }
-    return [
-      { href: '/dashboard', label: 'Dashboard', icon: <SpaceDashboardIcon /> },
-      { href: '/bands', label: 'Bands', icon: <LibraryMusicIcon /> },
-      { href: '/events', label: 'Events', icon: <EventIcon /> },
-      { href: '/settings', label: 'Account', icon: <AccountCircleIcon /> },
-    ];
-  }, [auth]);
-
-  const value = tabs.findIndex((t) => pathname?.startsWith(t.href));
-  const current = value === -1 ? 0 : value;
+      const name =
+        [profile?.first_name, profile?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() ||
+        (user.user_metadata?.name as string | undefined) ||
+        user.email ||
+        '';
+      const derived =
+        name
+          .split(/\s+/)
+          .map((p) => p[0])
+          .filter(Boolean)
+          .slice(0, 2)
+          .join('')
+          .toUpperCase() || 'U';
+      setInitials(derived);
+    })();
+  }, [sb]);
 
   return (
-    <Paper
-      elevation={0}
-      sx={(t) => ({
-        position: 'fixed',
-        display: { xs: 'block', md: 'none' },
-        left: 0,
-        right: 0,
-        bottom: 0,
-        borderTop: '1px solid',
-        borderColor: alpha(t.palette.primary.main, 0.22),
-        bgcolor: '#0B0B10',
-      })}
-    >
-      <BottomNavigation
-        showLabels={false} // icons only on small screens
-        value={current}
-        onChange={(_e, idx) => router.push(tabs[idx].href)}
-        sx={{ bgcolor: 'transparent' }}
+    <>
+      <Paper
+        elevation={8}
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          display: { xs: 'block', md: 'none' },
+          zIndex: (t) => t.zIndex.fab,
+        }}
       >
-        {tabs.map((t) => (
+        <BottomNavigation showLabels>
           <BottomNavigationAction
-            key={t.href}
-            icon={t.icon}
-            sx={(theme) => ({
-              color: 'rgba(255,255,255,0.65)',
-              '&.Mui-selected': { color: theme.palette.primary.main },
-            })}
+            icon={<HomeOutlinedIcon />}
+            onClick={() => router.push('/dashboard')}
           />
-        ))}
-      </BottomNavigation>
-    </Paper>
+          <BottomNavigationAction
+            icon={<LibraryMusicOutlinedIcon />}
+            onClick={() => router.push('/bands')}
+          />
+          <BottomNavigationAction
+            icon={<EventOutlinedIcon />}
+            onClick={() => router.push('/events')}
+          />
+          <BottomNavigationAction
+            icon={<AccountAvatar size={24}>{initials}</AccountAvatar>}
+            onClick={(e) => setAcctAnchor(e.currentTarget)}
+          />
+        </BottomNavigation>
+      </Paper>
+
+      <AccountMenu
+        size={40}
+        anchorEl={acctAnchor}
+        open={Boolean(acctAnchor)}
+        onClose={() => setAcctAnchor(null)}
+      />
+    </>
   );
 }
