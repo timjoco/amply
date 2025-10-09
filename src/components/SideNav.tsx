@@ -1,11 +1,13 @@
 'use client';
 
+import AccountMenu from '@/components/AccountMenu';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import EventIcon from '@mui/icons-material/EventOutlined';
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusicOutlined';
 import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import { Box, Button, Divider, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -59,20 +61,41 @@ export default function SideNav() {
         gap: 1.5,
       })}
     >
-      {/* Brand (routes to /dashboard when logged in) */}
       <Box sx={{ px: 1, pb: 1 }}>
         <Link
-          href={authed ? '/dashboard' : '/'}
+          href="/dashboard"
           prefetch={false}
           aria-label="Amplee Home"
           style={{ textDecoration: 'none', color: 'inherit' }}
         >
-          <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
-            Amplee
-          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              pr: 0.5,
+            }}
+          >
+            <Image
+              src="/logo.png"
+              alt="Amplee"
+              width={28}
+              height={28}
+              priority
+              style={{
+                display: 'block',
+                borderRadius: 6,
+              }}
+            />
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+            >
+              AMPLEE
+            </Typography>
+          </Box>
         </Link>
       </Box>
-
       <Divider
         sx={(t) => ({ borderColor: alpha(t.palette.primary.main, 0.18) })}
       />
@@ -118,6 +141,11 @@ export default function SideNav() {
       </Stack>
 
       <Box sx={{ flex: 1 }} />
+      <Box
+        sx={{ display: 'flex', justifyContent: 'flex-start', px: 0.5, pb: 0.5 }}
+      >
+        <AccountMenu size={40} />
+      </Box>
     </Box>
   );
 }

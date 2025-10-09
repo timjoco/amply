@@ -1,5 +1,6 @@
 import AppFrame from '@/components/AppFrame';
 import EmotionRegistry from '@/components/EmotionRegistry';
+import FooterGuard from '@/components/FooterGuard';
 import ThemeClient from '@/components/ThemeClient';
 import type { Metadata } from 'next';
 import './globals.css';
@@ -22,6 +23,7 @@ export default function RootLayout({
         <EmotionRegistry>
           <ThemeClient>
             <AppFrame>{children}</AppFrame>
+            <FooterGuard />
           </ThemeClient>
         </EmotionRegistry>
       </body>

@@ -166,7 +166,6 @@ export default function DashboardClient() {
     }
   }, [bandName, refreshBands]);
 
-  // Reusable styles
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cardSx = (t: any) => ({
     height: '100%',
@@ -186,8 +185,7 @@ export default function DashboardClient() {
 
   const gridSx = {
     display: 'grid',
-    gap: 2.5, // theme.spacing(2.5)
-    // Full-bleed responsive grid across the main area
+    gap: 2.5,
     gridTemplateColumns: {
       xs: '1fr',
       sm: 'repeat(2, minmax(0, 1fr))',
@@ -197,7 +195,6 @@ export default function DashboardClient() {
   } as const;
 
   return (
-    // main content padding only; App shell handles full-viewport sizing
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
       <Stack spacing={1.5} sx={{ mb: 3 }}>
         <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
@@ -259,8 +256,6 @@ export default function DashboardClient() {
         </Box>
       ) : (
         <Box sx={gridSx}>
-          {/* Always-first tile */}
-          {/* <AddBandTile onClick={() => setCreateOpen(true)} /> */}
           {isMdUp && <AddBandTile onClick={() => setCreateOpen(true)} />}
           {bands.map((b) => (
             <BandCard

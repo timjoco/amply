@@ -2,7 +2,6 @@
 
 import BottomNav from '@/components/BottomNav';
 import SideNav, { SIDE_NAV_WIDTH } from '@/components/SideNav';
-import TopRightAccount from '@/components/TopRightAccount';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import { Box } from '@mui/material';
 import { useEffect, useState } from 'react';
@@ -58,11 +57,7 @@ export default function AppFrameClient({ children, initialAuthed }: Props) {
             zIndex: (t) => t.zIndex.appBar + 2,
             pointerEvents: 'none',
           }}
-        >
-          <Box sx={{ pointerEvents: 'auto' }}>
-            <TopRightAccount />
-          </Box>
-        </Box>
+        ></Box>
       )}
 
       {showSideNav && <BottomNav />}

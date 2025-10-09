@@ -1,4 +1,3 @@
-// app/dashboard/page.tsx (SERVER)
 import { supabaseServer } from '@/lib/supabaseServer';
 import { redirect } from 'next/navigation';
 import DashboardClient from './DashboardClient';
@@ -11,6 +10,6 @@ export default async function Page() {
   const {
     data: { user },
   } = await sb.auth.getUser();
-  if (!user) redirect('/'); // or '/login'
+  if (!user) redirect('/');
   return <DashboardClient />;
 }

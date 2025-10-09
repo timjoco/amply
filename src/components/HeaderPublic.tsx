@@ -1,51 +1,53 @@
 'use client';
 
-import { AppBar, Button, Toolbar, Typography } from '@mui/material';
+import { AppBar, Box, Button, Toolbar, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function HeaderPublic() {
   return (
     <AppBar
-      position="sticky"
+      position="static"
       elevation={0}
       color="default"
       sx={(t) => ({
-        // Full-bleed background across the viewport
-        mx: 'calc(50% - 50vw)',
-        width: '100vw',
-        left: 0,
-        right: 0,
-        zIndex: t.zIndex.appBar,
-
         bgcolor: '#0B0B10',
         color: 'common.white',
         borderBottom: '1px solid',
         borderColor: alpha(t.palette.primary.main, 0.22),
       })}
     >
-      <Toolbar
-        // Fluid width; minimal padding so items sit closer to edges on big screens
-        sx={{
-          width: '100%',
-          px: { xs: 2, md: 2 }, // keep this small to push content outward
-          minHeight: 64,
-          justifyContent: 'space-between',
-        }}
-      >
+      <Toolbar disableGutters sx={{ width: '100%', px: 2 }}>
+        {/* Brand: logo + wordmark */}
         <Link
           href="/"
           prefetch={false}
+          aria-label="Amplee Home"
           style={{ textDecoration: 'none', color: 'inherit' }}
         >
-          <Typography
-            variant="h6"
-            component="span"
-            sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pr: 0.5 }}
           >
-            Amplee
-          </Typography>
+            <Image
+              src="/logo.png" // or /amplee-mark.svg
+              alt="Amplee"
+              width={28}
+              height={28}
+              priority
+              style={{ display: 'block', borderRadius: 6 }}
+            />
+            <Typography
+              variant="h6"
+              component="span"
+              sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+            >
+              AMPLEE
+            </Typography>
+          </Box>
         </Link>
+
+        <Box sx={{ flex: 1 }} />
 
         <Button
           component={Link}
