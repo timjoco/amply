@@ -1,25 +1,16 @@
-'use client';
-
+// src/theme.ts
 import { createTheme } from '@mui/material/styles';
 
 const theme = createTheme({
   palette: {
-    mode: 'dark', // ensures default MUI components adapt
-    primary: {
-      main: '#6a1b9a', // purple
-    },
-    secondary: {
-      main: '#ffffff', // white for accents
-    },
+    mode: 'dark',
+    primary: { main: '#7C3AED' }, // purple
+    secondary: { main: '#A855F7' }, // lavender
     background: {
-      default: '#200934', // plum background
-      paper: '#111111', // slightly lighter for cards/app bars
-    },
-    text: {
-      primary: '#ffffff',
-      secondary: '#cccccc',
+      default: '#0B0B10', // page background
+      paper: '#0F1016', // card background
     },
   },
+  shape: { borderRadius: 12 },
 });
-
 export default theme;

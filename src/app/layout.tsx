@@ -1,7 +1,6 @@
-// src/app/layout.tsx
-import AppFrame from '@/components/AppFrame'; // server wrapper that passes initialAuthed
+import AppFrame from '@/components/AppFrame';
 import EmotionRegistry from '@/components/EmotionRegistry';
-import ThemeClient from '@/components/ThemeClient'; // or your ThemeProvider+CssBaseline wrapper
+import ThemeClient from '@/components/ThemeClient';
 import type { Metadata } from 'next';
 import './globals.css';
 
@@ -16,6 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <meta name="color-scheme" content="dark" />
+      </head>
       <body>
         <EmotionRegistry>
           <ThemeClient>
