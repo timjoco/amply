@@ -76,6 +76,7 @@ export default function TopRightAccount() {
             fontSize: { xs: 16, md: 18 },
             fontWeight: 700,
             letterSpacing: 0.5,
+            color: 'white',
             bgcolor: 'primary.main',
           }}
         >
