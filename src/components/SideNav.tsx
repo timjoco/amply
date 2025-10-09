@@ -1,18 +1,10 @@
 'use client';
 
-import ProfileMenu from '@/components/ProfileMenu';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import EventIcon from '@mui/icons-material/EventOutlined';
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusicOutlined';
 import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
-import {
-  Box,
-  Button,
-  Divider,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Divider, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -45,7 +37,6 @@ export default function SideNav() {
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
-  // If not sure yet OR logged-out → render nothing (no flash on landing)
   if (authed !== true) return null;
 
   return (
@@ -127,13 +118,6 @@ export default function SideNav() {
       </Stack>
 
       <Box sx={{ flex: 1 }} />
-
-      {/* Bottom: profile */}
-      <Tooltip title="Account">
-        <Box sx={{ display: 'flex', justifyContent: 'flex-start', px: 0.5 }}>
-          <ProfileMenu />
-        </Box>
-      </Tooltip>
     </Box>
   );
 }
