@@ -1,12 +1,11 @@
 'use client';
 
 import BottomNav from '@/components/BottomNav';
+import HeaderPublic from '@/components/HeaderPublic';
 import SideNav, { SIDE_NAV_WIDTH } from '@/components/SideNav';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import { Box } from '@mui/material';
 import { useEffect, useState } from 'react';
-// If you show a public header when logged out:
-import HeaderPublic from '@/components/HeaderPublic';
 
 type Props = { children: React.ReactNode; initialAuthed: boolean };
 
