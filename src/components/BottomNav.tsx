@@ -4,8 +4,8 @@ import AccountAvatar from '@/components/AccountAvatar';
 import AccountMenu from '@/components/AccountMenu';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
-import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import LibraryMusicOutlinedIcon from '@mui/icons-material/LibraryMusicOutlined';
+import DashboardIcon from '@mui/icons-material/SpaceDashboard';
 import { BottomNavigation, BottomNavigationAction, Paper } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -63,7 +63,7 @@ export default function BottomNav() {
       >
         <BottomNavigation showLabels>
           <BottomNavigationAction
-            icon={<HomeOutlinedIcon />}
+            icon={<DashboardIcon />}
             onClick={() => router.push('/dashboard')}
           />
           <BottomNavigationAction
