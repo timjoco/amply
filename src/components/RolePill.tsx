@@ -22,6 +22,13 @@ export default function RolePill({ role, size = 'small' }: Props) {
       size={size}
       label={role.toUpperCase()}
       sx={(t) => ({
+        // prevent stretching in flex/Stack parents
+        alignSelf: 'flex-start',
+        display: 'inline-flex',
+        width: 'auto',
+        maxWidth: 'max-content',
+        flexShrink: 0,
+
         fontWeight: 800,
         letterSpacing: 0.6,
         borderRadius: 999,

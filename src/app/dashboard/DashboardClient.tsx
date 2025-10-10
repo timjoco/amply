@@ -1,7 +1,9 @@
 'use client';
+
 import AddBandTile from '@/components/AddBandTile';
 import BandCard from '@/components/BandCard';
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import type { Band, MembershipRole } from '@/types/db';
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -27,11 +29,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-type Band = {
-  id: string;
-  name: string;
-  band_role?: 'admin' | 'member' | string;
-};
+type BandWithRole = Band & { band_role: MembershipRole };
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -50,7 +48,8 @@ export default function DashboardClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [greetingName, setGreetingName] = useState('there');
-  const [bands, setBands] = useState<Band[]>([]);
+
+  const [bands, setBands] = useState<BandWithRole[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [bandName, setBandName] = useState('');
@@ -75,7 +74,7 @@ export default function DashboardClient() {
         setError(null);
 
         const { data: profile, error: pErr } = await sb
-          .from('users')
+          .from('profiles')
           .select('first_name, email, onboarded')
           .eq('id', user.id)
           .maybeSingle();
@@ -94,14 +93,19 @@ export default function DashboardClient() {
           .eq('user_id', user.id);
         if (mErr) throw mErr;
 
-        const list: Band[] = (rows || [])
+        const list: BandWithRole[] = (rows || [])
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((r: any) => ({
-            id: r.bands?.id,
-            name: r.bands?.name,
-            band_role: r.band_role,
-          }))
-          .filter((b) => b.id && b.name);
+          .map((r: any) =>
+            r?.bands
+              ? {
+                  id: r.bands.id,
+                  name: r.bands.name,
+                  band_role: r.band_role as MembershipRole, // ← narrow here
+                }
+              : null
+          )
+          .filter(Boolean) as BandWithRole[];
+
         setBands(list);
       } catch (e: unknown) {
         console.error(e);
@@ -127,21 +131,24 @@ export default function DashboardClient() {
       data: { user },
     } = await sb.auth.getUser();
 
-    // include band_role in the select
+    // refreshBands:
     let q = sb.from('band_memberships').select('band_role, bands(id, name)');
     if (user) q = q.eq('user_id', user.id);
-
     const { data: rows, error } = await q;
     if (error) throw error;
 
-    const list: Band[] = (rows ?? [])
+    const list: BandWithRole[] = (rows ?? [])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((r: any) =>
         r?.bands
-          ? { id: r.bands.id, name: r.bands.name, band_role: r.band_role }
+          ? {
+              id: r.bands.id,
+              name: r.bands.name,
+              band_role: r.band_role as MembershipRole,
+            }
           : null
       )
-      .filter(Boolean) as Band[];
+      .filter(Boolean) as BandWithRole[];
 
     setBands(list);
   }, []);

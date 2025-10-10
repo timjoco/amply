@@ -71,7 +71,7 @@ export default function CallbackClient() {
       }
 
       const { data: profile } = await supabase
-        .from('users')
+        .from('profiles')
         .select('onboarded')
         .maybeSingle();
 

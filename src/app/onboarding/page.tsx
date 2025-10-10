@@ -42,7 +42,7 @@ export default function OnboardingPage() {
 
         // read profile
         const { data: profile, error: pErr } = await supabase
-          .from('users')
+          .from('profiles')
           .select('id, first_name, last_name, location, onboarded')
           .maybeSingle();
         if (pErr) throw pErr;
@@ -51,7 +51,7 @@ export default function OnboardingPage() {
 
         if (!profile) {
           const { error: upErr } = await supabase
-            .from('users')
+            .from('profiles')
             .upsert({ id: user.id, email: user.email }, { onConflict: 'id' });
           if (upErr) throw upErr;
 
@@ -97,7 +97,7 @@ export default function OnboardingPage() {
         return;
       }
       const { error: uErr } = await supabase
-        .from('users')
+        .from('profiles')
         .update(payload)
         .eq('id', user.id);
       if (uErr) throw uErr;

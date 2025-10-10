@@ -79,7 +79,7 @@ export default function AccountMenu({
         setEmail(user.email ?? null);
 
         const { data: profile } = await sb
-          .from('users')
+          .from('profiles')
           .select('first_name, last_name')
           .eq('id', user.id)
           .maybeSingle();

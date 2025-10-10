@@ -23,7 +23,7 @@ export default function BottomNav() {
       } = await sb.auth.getUser();
       if (!user) return;
       const { data: profile } = await sb
-        .from('users')
+        .from('profiles')
         .select('first_name, last_name')
         .eq('id', user.id)
         .maybeSingle();

@@ -1,5 +1,7 @@
 'use client';
 
+import type { MembershipRole } from '@/types/db';
+
 import {
   Box,
   Card,
@@ -13,7 +15,7 @@ import RolePill from './RolePill';
 type Props = {
   id: string;
   name: string;
-  bandRole?: string;
+  bandRole?: MembershipRole; // ← not string
   height?: number;
 };
 
