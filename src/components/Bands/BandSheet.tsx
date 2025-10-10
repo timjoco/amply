@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogTitle,
   MenuItem,
+  Snackbar,
   Stack,
   Tab,
   Tabs,
@@ -54,20 +55,22 @@ export default function BandSheet({ bandId }: Props) {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<MembershipRole>('member');
 
-  const [inviting, setInviting] = useState(false);
-
   const [myRole, setMyRole] = useState<MembershipRole>('member');
   const [bandName, setBandName] = useState<string>('Band');
   const [tab, setTab] = useState<TabKey>('overview');
 
-  const [email, setEmail] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'member' | 'admin'>(
-    'member'
-  );
-  const [sending, setSending] = useState(false);
-
   // NEW: keep roster in state
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [sending, setSending] = useState(false);
+  const [snack, setSnack] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   useEffect(() => {
     let alive = true;
@@ -201,33 +204,59 @@ export default function BandSheet({ bandId }: Props) {
   const isAdmin = (myRole ?? 'member') === 'admin';
 
   const sendInvite = useCallback(async () => {
-    const supabase = supabaseBrowser();
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email) {
-      // show UI error instead if you prefer
-      throw new Error('Please enter an email address');
+    try {
+      setSending(true);
+
+      const sb = supabaseBrowser();
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      if (!session) throw new Error('Not signed in');
+
+      // basic client-side email check (optional)
+      const email = inviteEmail.trim();
+      if (!email) throw new Error('Please enter an email address');
+
+      const res = await fetch(`/api/bands/${bandId}/invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email,
+          band_role: inviteRole, // <-- use the role from the dialog
+          bandName,
+        }),
+      });
+
+      if (!res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        const payload = ct.includes('application/json')
+          ? await res.json()
+          : await res.text();
+        const msg =
+          typeof payload === 'string'
+            ? payload
+            : payload?.error || 'Invite failed';
+        throw new Error(msg);
+      }
+
+      // success: close and notify
+      setInviteOpen(false); // <-- close the *actual* dialog
+      setInviteEmail('');
+      setSnack({
+        open: true,
+        message: `Invite sent to ${email}`,
+        severity: 'success',
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Invite failed';
+      setSnack({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setSending(false);
     }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) throw new Error('Not signed in');
-
-    const res = await fetch(`/api/bands/${bandId}/invite`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        email,
-        band_role: selectedRole as 'member' | 'admin',
-        bandName,
-      }),
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-  }, [inviteEmail, bandId, selectedRole, bandName]);
+  }, [bandId, inviteEmail, inviteRole, bandName]);
 
   if (loading) {
     return (
@@ -433,16 +462,32 @@ export default function BandSheet({ bandId }: Props) {
           <Button
             variant="contained"
             onClick={sendInvite}
-            disabled={inviting || !inviteEmail.trim()}
+            disabled={sending || !inviteEmail.trim()}
             startIcon={
-              inviting ? <CircularProgress size={18} /> : <GroupAddIcon />
+              sending ? <CircularProgress size={18} /> : <GroupAddIcon />
             }
             sx={{ borderRadius: 999, textTransform: 'none' }}
           >
-            {inviting ? 'Sending…' : 'Send Invite'}
+            {sending ? 'Sending…' : 'Send Invite'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnack((s) => ({ ...s, open: false }))}
+          severity={snack.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snack.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

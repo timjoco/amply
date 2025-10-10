@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
@@ -24,52 +25,65 @@ export default function CallbackClient() {
 
     const run = async () => {
       const supabase = supabaseBrowser();
+      const invite = search.get('invite') ?? undefined;
 
-      // 1) Check for session
-      const { data, error: sessionErr } = await supabase.auth.getSession();
+      // 1) Ensure we have (or get) a session early
+      const { data: sessionData, error: sessionErr } =
+        await supabase.auth.getSession();
       if (sessionErr) {
         if (mounted) setError(sessionErr.message);
         return;
       }
-      if (!data.session) {
-        if (mounted)
-          setError('No active session found. Please try the link again.');
+      const session = sessionData?.session ?? null;
+
+      // 2) If there is an invite, preview it first (GET /api/invites/[id])
+      let inviteEmail: string | undefined;
+      if (invite) {
+        try {
+          const metaRes = await fetch(
+            `/api/invites/${encodeURIComponent(invite)}`,
+            {
+              method: 'GET',
+            }
+          );
+
+          // Safely parse
+          const metaCT = metaRes.headers.get('content-type') || '';
+          const metaPayload = metaCT.includes('application/json')
+            ? await metaRes.json()
+            : await metaRes.text();
+
+          if (!metaRes.ok) {
+            const msg =
+              typeof metaPayload === 'string'
+                ? metaPayload
+                : metaPayload?.error ??
+                  'This invite link is invalid or already used.';
+            if (mounted) setError(msg);
+            return;
+          }
+
+          inviteEmail = (metaPayload?.invite?.email || '').toLowerCase();
+        } catch (e: any) {
+          if (mounted) setError(e?.message ?? 'Failed to load invite.');
+          return;
+        }
+      }
+
+      // 3) If we have an invite but no session, send to login prefilled, then bounce back here
+      if (invite && !session) {
+        router.replace(
+          `/login?email=${encodeURIComponent(
+            inviteEmail || ''
+          )}&next=${encodeURIComponent(`/auth/callback?invite=${invite}`)}`
+        );
         return;
       }
 
-      // inside your useEffect run() just before you process/accept the invite:
-      const invite = search.get('invite');
-
-      if (invite) {
-        // 0) preview the invite (no mutation)
-        const metaRes = await fetch(
-          `/api/bands/accept-invite?token=${encodeURIComponent(invite)}`
-        );
-        if (!metaRes.ok) {
-          // invalid / consumed -> show error and bail to dashboard or login
-          if (mounted) setError('This invite link is invalid or already used.');
-          return;
-        }
-        const meta = await metaRes.json(); // { ok:true, invite: { email, band_id, band_role, status } }
-        const inviteEmail = meta?.invite?.email?.toLowerCase?.();
-
-        // 1) check session
-        const supabase = supabaseBrowser();
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userEmail = sessionData?.session?.user?.email?.toLowerCase?.();
-
-        if (!sessionData?.session) {
-          // not logged in → go to login with email prefilled and return here afterward
-          router.replace(
-            `/login?email=${encodeURIComponent(
-              inviteEmail
-            )}&next=${encodeURIComponent(`/auth/callback?invite=${invite}`)}`
-          );
-          return;
-        }
-
+      // 4) If logged in under a different email than the invite, sign out and force correct login
+      if (invite && session) {
+        const userEmail = session.user?.email?.toLowerCase?.() || '';
         if (inviteEmail && userEmail && inviteEmail !== userEmail) {
-          // logged in as someone else → sign out then go to login prefilled
           await supabase.auth.signOut();
           router.replace(
             `/login?email=${encodeURIComponent(
@@ -78,68 +92,61 @@ export default function CallbackClient() {
           );
           return;
         }
+      }
 
-        // 2) session email matches invite → accept it
-        const res = await fetch(
-          `/api/bands/accept-invite?token=${encodeURIComponent(invite)}`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${sessionData.session.access_token}`,
-            },
+      // 5) Accept the invite (POST /api/invites/[id]/accept) now that we’re logged in as the invitee
+      if (invite && session) {
+        try {
+          const acceptRes = await fetch(
+            `/api/invites/${encodeURIComponent(invite)}/accept`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            }
+          );
+
+          const ct = acceptRes.headers.get('content-type') || '';
+          const payload = ct.includes('application/json')
+            ? await acceptRes.json()
+            : await acceptRes.text();
+
+          if (!acceptRes.ok) {
+            const msg =
+              typeof payload === 'string'
+                ? payload
+                : payload?.error ??
+                  `${acceptRes.status} ${acceptRes.statusText}`;
+            throw new Error(msg);
           }
-        );
-        if (!res.ok) {
-          const body = await res.text();
-          if (mounted) setError(body || 'Invite acceptance failed');
+          // success, continue
+        } catch (e: any) {
+          if (mounted) setError(e?.message ?? 'Invite acceptance failed');
           return;
         }
       }
 
-      // 2) Process invite if present
-
-      if (invite) {
-        try {
-          // We already fetched the session above; grab the token:
-          // CallbackClient.tsx (inside the `if (invite) { ... }`)
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData.session?.access_token;
-
-          const res = await fetch(
-            `/api/bands/accept-invite?token=${encodeURIComponent(invite)}`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`, // <-- important
-              },
-            }
-          );
-          if (!res.ok) throw new Error(await res.text());
-        } catch (err: unknown) {
-          if (mounted) {
-            const msg =
-              err instanceof Error ? err.message : 'Invite acceptance failed';
-            setError(msg);
-          }
-          // let the rest of the flow continue (user may still proceed)
-        }
-      }
-
-      // 3) Route based on membership
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      // 6) Route based on profile.onboarded
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
         router.replace('/login');
+        return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profErr } = await supabase
         .from('profiles')
         .select('onboarded')
         .maybeSingle();
 
+      if (profErr) {
+        // If profile read fails, default to dashboard (or show a gentle error)
+        router.replace('/dashboard');
+        return;
+      }
+
       if (!profile || profile.onboarded === false) {
-        router.replace('/onboarding'); // collect name + location
+        router.replace('/onboarding');
       } else {
         router.replace('/dashboard');
       }

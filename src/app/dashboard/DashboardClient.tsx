@@ -45,82 +45,82 @@ export default function DashboardClient() {
   const router = useRouter();
   const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [greetingName, setGreetingName] = useState('there');
-
   const [bands, setBands] = useState<BandWithRole[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [bandName, setBandName] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // Load greeting + bands (no redirects here — server already gated access)
   useEffect(() => {
     const sb = supabaseBrowser();
+    let mounted = true;
 
-    let active = true;
     (async () => {
-      const {
-        data: { user },
-      } = await sb.auth.getUser();
-      if (!active) return;
-      if (!user) {
-        router.replace('/');
-        return;
-      }
-
       try {
         setLoading(true);
         setError(null);
 
-        const { data: profile, error: pErr } = await sb
-          .from('profiles')
-          .select('first_name, email, onboarded')
-          .eq('id', user.id)
-          .maybeSingle();
-        if (pErr) throw pErr;
-
-        if (!profile?.onboarded) {
-          router.replace('/onboarding');
+        // ensure session exists; if not, bounce to login (with next)
+        const {
+          data: { user },
+        } = await sb.auth.getUser();
+        if (!mounted) return;
+        if (!user) {
+          router.replace('/login?next=/dashboard');
           return;
         }
 
-        setGreetingName(profile.first_name || profile.email || 'there');
+        // greeting name (tolerate missing profile fields)
+        const { data: profile } = await sb
+          .from('profiles')
+          .select('first_name, email')
+          .eq('id', user.id)
+          .maybeSingle();
 
+        setGreetingName(profile?.first_name || profile?.email || 'there');
+
+        // load bands via memberships
         const { data: rows, error: mErr } = await sb
           .from('band_memberships')
           .select('band_role, bands(id, name)')
           .eq('user_id', user.id);
+
         if (mErr) throw mErr;
 
-        const list: BandWithRole[] = (rows || [])
+        const list: BandWithRole[] = (rows ?? [])
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .map((r: any) =>
             r?.bands
               ? {
-                  id: r.bands.id,
-                  name: r.bands.name,
-                  band_role: r.band_role as MembershipRole, // ← narrow here
+                  id: r.bands.id as string,
+                  name: r.bands.name as string,
+                  band_role: r.band_role as MembershipRole,
                 }
               : null
           )
-          .filter(Boolean) as BandWithRole[];
+          .filter((b): b is BandWithRole => b !== null);
 
         setBands(list);
-      } catch (e: unknown) {
+      } catch (e) {
+        if (!mounted) return;
         console.error(e);
         setError(getErrorMessage(e) || 'Failed to load dashboard');
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     })();
 
     const { data: sub } = sb.auth.onAuthStateChange((_e, s) => {
-      if (!s?.user) router.replace('/');
+      if (!s?.user) router.replace('/login?next=/dashboard');
     });
 
     return () => {
-      active = false;
+      mounted = false;
       sub?.subscription?.unsubscribe?.();
     };
   }, [router]);
@@ -130,11 +130,12 @@ export default function DashboardClient() {
     const {
       data: { user },
     } = await sb.auth.getUser();
+    if (!user) return;
 
-    // refreshBands:
-    let q = sb.from('band_memberships').select('band_role, bands(id, name)');
-    if (user) q = q.eq('user_id', user.id);
-    const { data: rows, error } = await q;
+    const { data: rows, error } = await sb
+      .from('band_memberships')
+      .select('band_role, bands(id, name)')
+      .eq('user_id', user.id);
     if (error) throw error;
 
     const list: BandWithRole[] = (rows ?? [])
@@ -142,13 +143,13 @@ export default function DashboardClient() {
       .map((r: any) =>
         r?.bands
           ? {
-              id: r.bands.id,
-              name: r.bands.name,
+              id: r.bands.id as string,
+              name: r.bands.name as string,
               band_role: r.band_role as MembershipRole,
             }
           : null
       )
-      .filter(Boolean) as BandWithRole[];
+      .filter((b): b is BandWithRole => b !== null);
 
     setBands(list);
   }, []);
@@ -157,7 +158,12 @@ export default function DashboardClient() {
     if (!bandName.trim()) return;
     try {
       setCreating(true);
+      setError(null);
+
       const sb = supabaseBrowser();
+      // assumes you have a `create_band(p_name text)` RPC that:
+      // - creates band
+      // - inserts membership for auth.uid() as 'admin'
       const { error } = await sb.rpc('create_band', {
         p_name: bandName.trim(),
       });
@@ -166,13 +172,14 @@ export default function DashboardClient() {
       setCreateOpen(false);
       setBandName('');
       await refreshBands();
-    } catch (e: unknown) {
+    } catch (e) {
       setError(getErrorMessage(e) || 'Could not create band');
     } finally {
       setCreating(false);
     }
   }, [bandName, refreshBands]);
 
+  // styles
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cardSx = (t: any) => ({
     height: '100%',

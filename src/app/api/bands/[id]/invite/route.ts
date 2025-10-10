@@ -1,32 +1,37 @@
+// src/app/api/bands/[id]/invite/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-
-type BodyIn = {
-  email?: string;
-  band_role?: 'member' | 'admin';
-  role?: 'member' | 'admin'; // legacy input name
-  bandName?: string;
-};
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> } // Next 15 validation requires Promise here
-) {
-  try {
-    const { id: bandId } = await context.params;
+type BodyIn = {
+  email?: string;
+  band_role?: 'member' | 'admin'; // preferred
+  role?: 'member' | 'admin'; // legacy alias; we normalize to band_role
+  bandName?: string;
+};
 
-    // Parse and normalize body
+async function getBandId(ctx: { params: any }) {
+  const p = ctx?.params;
+  if (!p) throw new Error('Missing params');
+  if (typeof p.then === 'function') return (await p).id as string;
+  return p.id as string;
+}
+
+export async function POST(req: NextRequest, ctx: { params: any }) {
+  try {
+    const bandId = await getBandId(ctx);
+
+    // Parse & normalize body
     const raw = (await req.json()) as BodyIn;
     const email = raw.email?.trim().toLowerCase();
     const band_role = (raw.band_role ?? raw.role)?.toLowerCase() as
       | 'member'
       | 'admin'
       | undefined;
+    const bandName = raw.bandName?.toString();
 
     if (!email || !band_role) {
       return NextResponse.json(
@@ -35,7 +40,7 @@ export async function POST(
       );
     }
 
-    // Use caller JWT so RLS runs as the user
+    // Caller JWT so RLS enforces is_band_admin etc.
     const authHeader =
       req.headers.get('authorization') ?? req.headers.get('Authorization');
     if (!authHeader) {
@@ -51,24 +56,16 @@ export async function POST(
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Insert/update invite to get token
+    // Insert or update pending invite; column is `band_role`
     let token: string | null = null;
 
     const insertRes = await supabaseRls
       .from('band_invitations')
-      .insert([
-        {
-          band_id: bandId,
-          email,
-          band_role, // <- column is band_role
-          status: 'pending',
-        },
-      ])
+      .insert([{ band_id: bandId, email, band_role, status: 'pending' }])
       .select('token')
       .single();
 
     if (insertRes.error) {
-      // 23505 unique_violation (e.g., unique (band_id,email,status))
       if ((insertRes.error as any).code === '23505') {
         const updRes = await supabaseRls
           .from('band_invitations')
@@ -107,7 +104,7 @@ export async function POST(
       );
     }
 
-    // Build accept URL
+    // Accept URL shown in email
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ??
       process.env.VERCEL_URL ??
@@ -117,39 +114,32 @@ export async function POST(
       token
     )}`;
 
-    // Send the email via Edge Function using service role
+    // Send email via Edge Function (service role)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY! // server only
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-
     const invokeRes = await supabaseAdmin.functions.invoke('send-invite', {
-      body: { to: email, acceptUrl, bandName: raw.bandName },
+      body: { to: email, acceptUrl, bandName },
     });
-
     if (invokeRes.error) {
-      // Surface function error details
       return NextResponse.json(
         { error: invokeRes.error.message },
         { status: 400 }
       );
     }
 
-    return NextResponse.json({ ok: true, token, acceptUrl });
+    return NextResponse.json({ ok: true, token, acceptUrl, band_role });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
       { error: msg || 'Invite failed' },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }
 
-// Simple ping
-export async function GET(
-  _req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  return NextResponse.json({ ok: true, id });
+export async function GET(_req: NextRequest, ctx: { params: any }) {
+  const bandId = await getBandId(ctx);
+  return NextResponse.json({ ok: true, bandId });
 }
