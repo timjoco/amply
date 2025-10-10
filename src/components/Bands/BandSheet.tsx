@@ -40,7 +40,11 @@ type MemberRow = {
   profile: ProfileLite | null;
 };
 
-export default function BandSheet({ bandId }: { bandId: string }) {
+type Props = {
+  bandId: string; // make sure you pass this in from the page
+};
+
+export default function BandSheet({ bandId }: Props) {
   const sb = useMemo(() => supabaseBrowser(), []);
 
   const [loading, setLoading] = useState(true);
@@ -49,11 +53,18 @@ export default function BandSheet({ bandId }: { bandId: string }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<MembershipRole>('member');
+
   const [inviting, setInviting] = useState(false);
 
   const [myRole, setMyRole] = useState<MembershipRole>('member');
   const [bandName, setBandName] = useState<string>('Band');
   const [tab, setTab] = useState<TabKey>('overview');
+
+  const [email, setEmail] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'member' | 'admin'>(
+    'member'
+  );
+  const [sending, setSending] = useState(false);
 
   // NEW: keep roster in state
   const [members, setMembers] = useState<MemberRow[]>([]);
@@ -190,67 +201,33 @@ export default function BandSheet({ bandId }: { bandId: string }) {
   const isAdmin = (myRole ?? 'member') === 'admin';
 
   const sendInvite = useCallback(async () => {
-    if (!inviteEmail.trim()) return;
-    try {
-      setInviting(true);
-      setError(null);
-
-      if (!isAdmin) throw new Error('Only admins can invite');
-
-      // 1) Get access token (RLS needs this)
-      const { data: sessionData, error: sessErr } = await sb.auth.getSession();
-      if (sessErr) throw sessErr;
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error('Not signed in');
-
-      // 2) Build absolute URL (avoids any basePath quirks)
-      const url = `${window.location.origin}/api/bands/${bandId}/invite`;
-      console.log('POST', url);
-
-      // 3) Hit the API
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`, // critical for RLS
-        },
-        body: JSON.stringify({
-          email: inviteEmail.trim().toLowerCase(),
-          role: inviteRole, // 'member' | 'admin'
-          bandName, // optional
-        }),
-      });
-
-      const raw = await res.text(); // capture body exactly once
-      let body: any = {};
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        /* non-JSON error body */
-      }
-
-      if (!res.ok) {
-        console.error('Invite API error:', {
-          status: res.status,
-          url,
-          body: raw,
-        });
-        const msg = body?.error || `${res.status} ${res.statusText}`;
-        throw new Error(msg);
-      }
-
-      // success
-      console.log('Invite API success:', body);
-      setInviteOpen(false);
-      setInviteEmail('');
-      setInviteRole('member');
-    } catch (e: any) {
-      console.error('sendInvite failed:', e);
-      setError(e?.message ?? 'Failed to create invite');
-    } finally {
-      setInviting(false);
+    const supabase = supabaseBrowser();
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) {
+      // show UI error instead if you prefer
+      throw new Error('Please enter an email address');
     }
-  }, [sb, bandId, inviteEmail, inviteRole, isAdmin, bandName]);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not signed in');
+
+    const res = await fetch(`/api/bands/${bandId}/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        email,
+        band_role: selectedRole as 'member' | 'admin',
+        bandName,
+      }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+  }, [inviteEmail, bandId, selectedRole, bandName]);
 
   if (loading) {
     return (

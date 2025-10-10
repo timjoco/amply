@@ -37,28 +37,91 @@ export default function CallbackClient() {
         return;
       }
 
-      // 2) Process invite if present
+      // inside your useEffect run() just before you process/accept the invite:
       const invite = search.get('invite');
+
+      if (invite) {
+        // 0) preview the invite (no mutation)
+        const metaRes = await fetch(
+          `/api/bands/accept-invite?token=${encodeURIComponent(invite)}`
+        );
+        if (!metaRes.ok) {
+          // invalid / consumed -> show error and bail to dashboard or login
+          if (mounted) setError('This invite link is invalid or already used.');
+          return;
+        }
+        const meta = await metaRes.json(); // { ok:true, invite: { email, band_id, band_role, status } }
+        const inviteEmail = meta?.invite?.email?.toLowerCase?.();
+
+        // 1) check session
+        const supabase = supabaseBrowser();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userEmail = sessionData?.session?.user?.email?.toLowerCase?.();
+
+        if (!sessionData?.session) {
+          // not logged in → go to login with email prefilled and return here afterward
+          router.replace(
+            `/login?email=${encodeURIComponent(
+              inviteEmail
+            )}&next=${encodeURIComponent(`/auth/callback?invite=${invite}`)}`
+          );
+          return;
+        }
+
+        if (inviteEmail && userEmail && inviteEmail !== userEmail) {
+          // logged in as someone else → sign out then go to login prefilled
+          await supabase.auth.signOut();
+          router.replace(
+            `/login?email=${encodeURIComponent(
+              inviteEmail
+            )}&next=${encodeURIComponent(`/auth/callback?invite=${invite}`)}`
+          );
+          return;
+        }
+
+        // 2) session email matches invite → accept it
+        const res = await fetch(
+          `/api/bands/accept-invite?token=${encodeURIComponent(invite)}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (!res.ok) {
+          const body = await res.text();
+          if (mounted) setError(body || 'Invite acceptance failed');
+          return;
+        }
+      }
+
+      // 2) Process invite if present
+
       if (invite) {
         try {
+          // We already fetched the session above; grab the token:
+          // CallbackClient.tsx (inside the `if (invite) { ... }`)
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+
           const res = await fetch(
             `/api/bands/accept-invite?token=${encodeURIComponent(invite)}`,
             {
               method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`, // <-- important
+              },
             }
           );
           if (!res.ok) throw new Error(await res.text());
         } catch (err: unknown) {
           if (mounted) {
             const msg =
-              err instanceof Error
-                ? err.message
-                : typeof err === 'string'
-                ? err
-                : 'Invite acceptance failed';
+              err instanceof Error ? err.message : 'Invite acceptance failed';
             setError(msg);
           }
-          // continue anyway
+          // let the rest of the flow continue (user may still proceed)
         }
       }
 

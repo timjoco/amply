@@ -1,74 +1,100 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// src/app/api/bands/accept-invite/route.ts
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
-  const url = new URL(req.url);
-  const token = url.searchParams.get('token');
-  if (!token)
-    return NextResponse.json({ error: 'Missing token' }, { status: 400 });
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-  // Service role to bypass RLS for the final membership write
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+export async function POST(req: NextRequest) {
+  try {
+    const token = new URL(req.url).searchParams.get('token');
+    if (!token)
+      return NextResponse.json({ error: 'Missing token' }, { status: 400 });
 
-  // 1) Look up invite
-  const { data: inv, error: invErr } = await supabase
-    .from('band_invitations')
-    .select('id, band_id, email, role, status, expires_at')
-    .eq('token', token)
-    .maybeSingle();
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-  if (invErr)
-    return NextResponse.json({ error: invErr.message }, { status: 400 });
-  if (!inv || inv.status !== 'pending') {
+    // 1) find invite by token
+    const { data: invite, error: invErr } = await admin
+      .from('band_invitations')
+      .select('token, band_id, email, role, status')
+      .eq('token', token)
+      .maybeSingle();
+
+    if (invErr)
+      return NextResponse.json({ error: invErr.message }, { status: 400 });
+    if (!invite || invite.status !== 'pending') {
+      return NextResponse.json(
+        { error: 'Invalid or expired invite token' },
+        { status: 400 }
+      );
+    }
+
+    // 2) get current user (via caller’s Authorization header)
+    const authHeader =
+      req.headers.get('authorization') ?? req.headers.get('Authorization');
+    if (!authHeader)
+      return NextResponse.json(
+        { error: 'Missing Authorization header' },
+        { status: 401 }
+      );
+
+    const rls = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: userRes, error: uErr } = await rls.auth.getUser();
+    if (uErr || !userRes?.user) {
+      return NextResponse.json(
+        { error: uErr?.message || 'No user' },
+        { status: 401 }
+      );
+    }
+
+    // Optional: enforce the invite email matches the logged-in email
+    const userEmail = (userRes.user.email || '').toLowerCase();
+    const inviteEmail = (invite.email || '').toLowerCase();
+    if (inviteEmail && inviteEmail !== userEmail) {
+      return NextResponse.json(
+        {
+          error: `Invite email does not match logged-in user (invite: ${inviteEmail}, user: ${userEmail})`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3) ensure FK target exists (if band_memberships.user_id references public.users)
+    await admin
+      .from('users')
+      .upsert({ id: userRes.user.id, email: userEmail }, { onConflict: 'id' });
+
+    // 4) insert membership (map role -> band_role)
+    const { error: memErr } = await admin.from('band_memberships').insert([
+      {
+        band_id: invite.band_id,
+        user_id: userRes.user.id,
+        band_role: invite.role as 'member' | 'admin',
+      },
+    ]);
+    if (memErr)
+      return NextResponse.json({ error: memErr.message }, { status: 400 });
+
+    // 5) mark invitation accepted
+    await admin
+      .from('band_invitations')
+      .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+      .eq('token', token);
+
+    return NextResponse.json({ ok: true, bandId: invite.band_id });
+  } catch (e: any) {
     return NextResponse.json(
-      { error: 'Invite invalid or already used' },
-      { status: 400 }
+      { error: e?.message ?? 'Failed to accept invite' },
+      { status: 500 }
     );
   }
-  if (new Date(inv.expires_at) < new Date()) {
-    return NextResponse.json({ error: 'Invite expired' }, { status: 400 });
-  }
-
-  // 2) Identify the currently authenticated user from the Authorization header (optional)
-  // If you want to bind to the logged-in user email, you can pass user id or email in the body.
-  // For simplicity, we’ll create membership by email match if such profile exists; otherwise, accept flow should happen after login.
-
-  // Try to find a profile with this email
-  const { data: prof } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', inv.email.toLowerCase())
-    .maybeSingle();
-
-  if (!prof?.id) {
-    // no profile yet — leave invite pending; front-end should prompt login/signup via magic link
-    return NextResponse.json({
-      ok: true,
-      pending: true,
-      message: 'Ask user to sign in with invited email.',
-    });
-  }
-
-  // 3) Upsert membership
-  const { error: upErr } = await supabase
-    .from('band_memberships')
-    .upsert(
-      { band_id: inv.band_id, user_id: prof.id, band_role: inv.role },
-      { onConflict: 'band_id,user_id' }
-    );
-  if (upErr)
-    return NextResponse.json({ error: upErr.message }, { status: 400 });
-
-  // 4) Mark invite accepted
-  const { error: accErr } = await supabase
-    .from('band_invitations')
-    .update({ status: 'accepted' })
-    .eq('id', inv.id);
-  if (accErr)
-    return NextResponse.json({ error: accErr.message }, { status: 400 });
-
-  return NextResponse.json({ ok: true, bandId: inv.band_id });
 }
