@@ -8,9 +8,14 @@ type Body = { email: string; role: 'member' | 'admin'; bandName?: string };
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function required(name: string, val: string | undefined) {
+  if (!val) throw new Error(`${name} is not set`);
+  return val;
+}
+
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> } // Next 15: params is a Promise
+  context: { params: Promise<{ id: string }> } // App Router "params" can be a Promise
 ) {
   try {
     const { id: bandId } = await context.params;
@@ -23,7 +28,21 @@ export async function POST(
       );
     }
 
-    // 1) Use caller's JWT so RLS runs
+    // --- Env guards (fail fast with a clear 500) ---
+    const SUPABASE_URL = required(
+      'NEXT_PUBLIC_SUPABASE_URL',
+      process.env.NEXT_PUBLIC_SUPABASE_URL
+    );
+    const SUPABASE_ANON = required(
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    const SERVICE_ROLE = required(
+      'SUPABASE_SERVICE_ROLE_KEY',
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // --- RLS: forward caller's JWT ---
     const authHeader =
       req.headers.get('authorization') ?? req.headers.get('Authorization');
     if (!authHeader) {
@@ -33,63 +52,43 @@ export async function POST(
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    if (!supabaseUrl || !anonKey) {
-      return NextResponse.json(
-        { error: 'Supabase URL/anon key not configured' },
-        { status: 500 }
-      );
-    }
-    if (!serviceKey) {
-      return NextResponse.json(
-        { error: 'SUPABASE_SERVICE_ROLE_KEY is missing on the server' },
-        { status: 500 }
-      );
-    }
-
-    const supabaseRls = createClient(supabaseUrl, anonKey, {
+    const supabaseRls = createClient(SUPABASE_URL, SUPABASE_ANON, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // 2) Insert or update invite to get token
-    let token: string | null = null;
+    // --- Insert (or upsert-role) invite to get token ---
+    const lowerEmail = email.toLowerCase();
 
     const insertRes = await supabaseRls
       .from('band_invitations')
-      .insert([
-        {
-          band_id: bandId,
-          email: email.toLowerCase(),
-          role,
-          status: 'pending',
-        },
-      ])
+      .insert([{ band_id: bandId, email: lowerEmail, role, status: 'pending' }])
       .select('token')
       .single();
 
+    let token: string | null = null;
+
     if (insertRes.error) {
-      // 23505 => unique_violation (band_id, email, status)
+      // Unique violation → update existing pending invite's role and return token
       if ((insertRes.error as any).code === '23505') {
         const updRes = await supabaseRls
           .from('band_invitations')
           .update({ role })
           .eq('band_id', bandId)
-          .eq('email', email.toLowerCase())
+          .eq('email', lowerEmail)
           .eq('status', 'pending')
           .select('token')
           .maybeSingle();
 
         if (updRes.error) {
+          console.error('invite:update error', updRes.error);
           return NextResponse.json(
-            { error: updRes.error.message },
+            { error: updRes.error.message, code: (updRes.error as any).code },
             { status: 400 }
           );
         }
         token = updRes.data?.token ?? null;
       } else {
+        console.error('invite:insert error', insertRes.error);
         return NextResponse.json(
           {
             error: insertRes.error.message,
@@ -110,7 +109,7 @@ export async function POST(
       );
     }
 
-    // 3) Build accept URL
+    // --- Build accept URL ---
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ??
       process.env.VERCEL_URL ??
@@ -120,56 +119,55 @@ export async function POST(
       token
     )}`;
 
-    // 4) Send email via Supabase Edge Function — no `status` in the type
-    const fnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL!.replace(
-      /\/+$/,
-      ''
-    )}/functions/v1/send-invite`;
-
-    const fnRes = await fetch(fnUrl, {
-      method: 'POST',
-      headers: {
-        // Service role lets you call a verify_jwt-protected function
-        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
-        // Some functions check for apikey too; harmless to include
-        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ to: email.toLowerCase(), acceptUrl, bandName }),
-    });
-
-    if (!fnRes.ok) {
-      let text = '';
-      try {
-        // try to parse JSON error first
-        const maybeJson = await fnRes.json();
-        text =
-          typeof maybeJson === 'string' ? maybeJson : JSON.stringify(maybeJson);
-      } catch {
-        // fallback to plain text
-        text = await fnRes.text().catch(() => '');
+    // --- Call Edge Function with SERVICE ROLE (works in dev & prod) ---
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data, error } = await supabaseAdmin.functions.invoke(
+      'send-invite',
+      {
+        body: { to: lowerEmail, acceptUrl, bandName },
       }
+    );
 
+    // If Deno function threw/returned non-2xx, `error` will be populated
+    if (error) {
+      // Try to pull more context (status, body) when available
+      const status = (error as any).context?.response?.status;
+      const statusText = (error as any).context?.response?.statusText;
+      const bodyText = await (error as any).context?.response
+        ?.text?.()
+        .catch(() => undefined);
+
+      console.error('send-invite.invoke error', {
+        error,
+        status,
+        statusText,
+        bodyText,
+      });
       return NextResponse.json(
         {
           error: 'send-invite failed',
-          status: fnRes.status,
-          statusText: fnRes.statusText,
-          body: text,
+          status: status ?? 502,
+          statusText: statusText ?? 'Bad Gateway',
+          body: bodyText,
         },
-        { status: 400 }
+        { status: status ?? 502 }
       );
     }
+
+    return NextResponse.json({
+      ok: true,
+      token,
+      acceptUrl,
+      function: data ?? null,
+    });
   } catch (e) {
+    console.error('invite route fatal', e);
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      { error: msg || 'Invite failed' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
-// Optional ping to test the route quickly
+// Optional: quick ping to verify params shape
 export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ id: string }> }
