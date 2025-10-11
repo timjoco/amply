@@ -27,6 +27,7 @@ export default async function HomePage() {
             fontWeight: 700,
             letterSpacing: -0.5,
             fontSize: { xs: '2rem', sm: '2.75rem', md: '3.25rem' },
+            color: 'common.white',
           }}
         >
           Simplify the chaos. Amplify the music.

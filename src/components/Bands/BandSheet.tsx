@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
+import BandTitleMenu from '@/components/Bands/BandTitleMenu';
 import RolePill from '@/components/RolePill';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import AddIcon from '@mui/icons-material/Add';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
-import SettingsIcon from '@mui/icons-material/Settings';
 import {
   Alert,
   Box,
@@ -24,9 +23,10 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-type TabKey = 'overview' | 'events' | 'roster' | 'chords' | 'settings';
+type TabKey = 'overview' | 'events' | 'roster' | 'chords';
 type MembershipRole = 'admin' | 'member';
 
 type ProfileLite = {
@@ -45,6 +45,11 @@ type Props = {
   bandId: string; // make sure you pass this in from the page
 };
 
+// const BandHeaderServer = dynamic(
+//   () => import('@/app/bands/[id]/BandHeaderServer'),
+//   { ssr: true }
+// );
+
 export default function BandSheet({ bandId }: Props) {
   const sb = useMemo(() => supabaseBrowser(), []);
 
@@ -59,7 +64,10 @@ export default function BandSheet({ bandId }: Props) {
   const [bandName, setBandName] = useState<string>('Band');
   const [tab, setTab] = useState<TabKey>('overview');
 
-  // NEW: keep roster in state
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [sending, setSending] = useState(false);
   const [snack, setSnack] = useState<{
@@ -201,6 +209,25 @@ export default function BandSheet({ bandId }: Props) {
     };
   }, [sb, bandId]);
 
+  useEffect(() => {
+    const sp = searchParams;
+    if (!sp) return;
+
+    const shouldOpen = sp.get('openInvite') === '1';
+    if (shouldOpen) {
+      setInviteOpen(true);
+
+      // Remove the param so it doesn't re-trigger on refresh/back
+      const next = new URLSearchParams(sp.toString());
+      next.delete('openInvite');
+
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+    // We intentionally depend only on searchParams so it reacts to route changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const isAdmin = (myRole ?? 'member') === 'admin';
 
   const sendInvite = useCallback(async () => {
@@ -286,59 +313,29 @@ export default function BandSheet({ bandId }: Props) {
 
       {/* Header */}
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        direction={{ xs: 'row', sm: 'row' }}
+        alignItems="center"
         spacing={2}
-        sx={{ mb: 2.5 }}
+        sx={{
+          mb: 2.5,
+          bgcolor: 'background.paper',
+          borderRadius: 2,
+          px: 2,
+          py: 1.5,
+          border: (t) => `1px solid ${alpha(t.palette.primary.main, 0.08)}`,
+        }}
       >
-        <Stack spacing={1}>
-          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0.3 }}>
-            {bandName}
-          </Typography>
-
-          <RolePill role={isAdmin ? 'admin' : 'member'} size="small" />
-        </Stack>
-
-        <Box sx={{ flex: 1 }} />
-
-        {isAdmin && (
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              startIcon={<GroupAddIcon />}
-              onClick={() => setInviteOpen(true)}
-              sx={(t) => ({
-                borderRadius: 999,
-                textTransform: 'none',
-                px: 2,
-                backgroundImage:
-                  'linear-gradient(90deg, #7C3AED 0%, #A855F7 50%, #7C3AED 100%)',
-                backgroundSize: '200% 100%',
-                boxShadow: `0 0 0 1px ${alpha(
-                  t.palette.primary.main,
-                  0.35
-                )}, 0 10px 24px rgba(0,0,0,.35)`,
-                '&:hover': { backgroundPosition: '100% 0' },
-              })}
-            >
-              Invite
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              sx={{ borderRadius: 999, textTransform: 'none' }}
-            >
-              New Event
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<SettingsIcon />}
-              sx={{ borderRadius: 999, textTransform: 'none' }}
-            >
-              Band Settings
-            </Button>
-          </Stack>
-        )}
+        <BandTitleMenu
+          bandId={bandId}
+          bandName={bandName}
+          onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
+        />
+        <Box sx={{ flex: 1, alignItems: 'center' }} />
+        <RolePill
+          role={isAdmin ? 'admin' : 'member'}
+          size="small"
+          sx={{ alignSelf: 'center' }}
+        />
       </Stack>
 
       {/* Tabs */}
@@ -358,7 +355,6 @@ export default function BandSheet({ bandId }: Props) {
         <Tab label="Events" value="events" />
         <Tab label="Roster" value="roster" />
         <Tab label="Chord Sheets" value="chords" />
-        {isAdmin && <Tab label="Settings" value="settings" />}
       </Tabs>
 
       {/* Panels (placeholder content) */}
@@ -389,6 +385,9 @@ export default function BandSheet({ bandId }: Props) {
                   `1px solid ${alpha(t.palette.primary.main, 0.12)}`,
               }}
             >
+              <Box sx={{ ml: 'auto' }}>
+                <RolePill role={m.band_role} size="small" />
+              </Box>
               <Typography sx={{ fontWeight: 700 }}>
                 {(m.profile?.first_name || '') +
                   ' ' +
@@ -397,9 +396,6 @@ export default function BandSheet({ bandId }: Props) {
               <Typography color="text.secondary">
                 {m.profile?.email ?? ''}
               </Typography>
-              <Box sx={{ ml: 'auto' }}>
-                <RolePill role={m.band_role} size="small" />
-              </Box>
             </Stack>
           ))}
         </Box>
@@ -407,11 +403,6 @@ export default function BandSheet({ bandId }: Props) {
       {tab === 'chords' && (
         <Typography color="text.secondary" sx={{ mt: 2 }}>
           Chord sheets library for this band.
-        </Typography>
-      )}
-      {tab === 'settings' && isAdmin && (
-        <Typography color="text.secondary" sx={{ mt: 2 }}>
-          Band name, slug, visibility, delete band…
         </Typography>
       )}
 

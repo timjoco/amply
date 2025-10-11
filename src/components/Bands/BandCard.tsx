@@ -10,7 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
-import RolePill from './RolePill';
+import RolePill from '../RolePill';
 
 type Props = {
   id: string;
@@ -54,11 +54,6 @@ export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
             gap: 1,
           }}
         >
-          {/* Glowing role pill */}
-          <Box sx={{ alignSelf: 'flex-start' }}>
-            <RolePill role={normalizedRole} />
-          </Box>
-
           {/* Band name */}
           <Typography variant="h5" sx={{ fontWeight: 800 }}>
             {name}
@@ -72,6 +67,10 @@ export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
           >
             Manage events, members, and settings.
           </Typography>
+          {/* Glowing role pill */}
+          <Box sx={{ alignSelf: 'flex-start' }}>
+            <RolePill role={normalizedRole} />
+          </Box>
         </CardContent>
       </CardActionArea>
     </Card>

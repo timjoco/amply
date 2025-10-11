@@ -1,24 +1,23 @@
+// src/utils/supabase/server.ts
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-export async function createClient() {
-  const cookieStore = await cookies();
+export function createClient() {
+  // NOTE: cookies() is synchronous
+  const cookieStore = cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!, // must be defined
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, // must be defined
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        async get(name) {
+          return (await cookieStore).get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {}
-        },
+        // In a pure Server Component we can no-op setters.
+        // For Route Handlers/Server Actions, use the Response cookie adapter per Supabase docs.
+        set() {},
+        remove() {},
       },
     }
   );

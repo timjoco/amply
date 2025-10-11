@@ -9,6 +9,7 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Link,
   Snackbar,
   Stack,
   Typography,
@@ -93,9 +94,9 @@ export default function SettingsPage() {
         <Typography variant="h4" fontWeight={700} letterSpacing={0.3}>
           Settings
         </Typography>
-        {/* <Button component={Link} href="/dashboard" variant="text" size="small">
+        <Button component={Link} href="/dashboard" variant="text" size="small">
           Back to Dashboard
-        </Button> */}
+        </Button>
       </Stack>
 
       <Card
@@ -143,7 +144,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* <Card sx={{ bgcolor: 'background.paper', borderRadius: 3, boxShadow: 3 }}>
+      <Card sx={{ bgcolor: 'background.paper', borderRadius: 3, boxShadow: 3 }}>
         <CardContent>
           <Typography variant="h6" fontWeight={700} gutterBottom>
             Preferences
@@ -152,7 +153,7 @@ export default function SettingsPage() {
             (Optional) Place theme, notifications, and other preferences here.
           </Typography>
         </CardContent>
-      </Card> */}
+      </Card>
 
       <Snackbar
         open={toast.open}

@@ -1,7 +1,7 @@
 'use client';
 
 import AddBandTile from '@/components/AddBandTile';
-import BandCard from '@/components/BandCard';
+import BandCard from '@/components/Bands/BandCard';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import type { Band, MembershipRole } from '@/types/db';
 import AddIcon from '@mui/icons-material/Add';
@@ -161,9 +161,7 @@ export default function DashboardClient() {
       setError(null);
 
       const sb = supabaseBrowser();
-      // assumes you have a `create_band(p_name text)` RPC that:
-      // - creates band
-      // - inserts membership for auth.uid() as 'admin'
+
       const { error } = await sb.rpc('create_band', {
         p_name: bandName.trim(),
       });
