@@ -92,7 +92,7 @@ export default function SettingsPage() {
         sx={{ mb: 3 }}
       >
         <Typography variant="h4" fontWeight={700} letterSpacing={0.3}>
-          Settings
+          User Settings
         </Typography>
         <Button component={Link} href="/dashboard" variant="text" size="small">
           Back to Dashboard

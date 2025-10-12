@@ -42,13 +42,16 @@ type MemberRow = {
 };
 
 type Props = {
-  bandId: string; // make sure you pass this in from the page
+  bandId: string;
 };
 
-// const BandHeaderServer = dynamic(
-//   () => import('@/app/bands/[id]/BandHeaderServer'),
-//   { ssr: true }
-// );
+type InvitationRow = {
+  id: string;
+  email: string;
+  band_role: MembershipRole;
+  created_at: string;
+  status: 'pending' | 'accepted' | 'expired' | 'revoked';
+};
 
 export default function BandSheet({ bandId }: Props) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -63,6 +66,7 @@ export default function BandSheet({ bandId }: Props) {
   const [myRole, setMyRole] = useState<MembershipRole>('member');
   const [bandName, setBandName] = useState<string>('Band');
   const [tab, setTab] = useState<TabKey>('overview');
+  const [invites, setInvites] = useState<InvitationRow[]>([]);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -80,6 +84,85 @@ export default function BandSheet({ bandId }: Props) {
     severity: 'success',
   });
 
+  /**
+   * Helper: (re)load members + pending invites for this band
+   */
+  const fetchRoster = useCallback(async () => {
+    try {
+      // Try view first (includes email)
+      let roster: any[] | null = null;
+      {
+        const { data, error } = await sb
+          .from('band_member_profiles')
+          .select('user_id, band_role, email, first_name, last_name')
+          .eq('band_id', bandId);
+        if (!error) {
+          roster = data ?? [];
+        }
+      }
+
+      // Fallback: memberships + profiles
+      if (!roster) {
+        const { data: memberships, error: mErr } = await sb
+          .from('band_memberships')
+          .select('user_id, band_role')
+          .eq('band_id', bandId);
+        if (mErr) throw mErr;
+
+        const userIds = (memberships ?? []).map((r) => r.user_id);
+        const profilesById = new Map<string, ProfileLite>();
+
+        if (userIds.length) {
+          const { data: profs } = await sb
+            .from('profiles')
+            .select('id, first_name, last_name, email')
+            .in('id', userIds);
+          (profs ?? []).forEach((p: any) =>
+            profilesById.set(p.id, {
+              first_name: p.first_name ?? null,
+              last_name: p.last_name ?? null,
+              email: p.email ?? null,
+            })
+          );
+        }
+
+        roster = (memberships ?? []).map((r: any) => ({
+          user_id: r.user_id,
+          band_role: r.band_role === 'admin' ? 'admin' : 'member',
+          first_name: profilesById.get(r.user_id)?.first_name ?? null,
+          last_name: profilesById.get(r.user_id)?.last_name ?? null,
+          email: profilesById.get(r.user_id)?.email ?? null,
+        }));
+      }
+
+      const normalized: MemberRow[] = (roster ?? []).map((r: any) => ({
+        user_id: r.user_id,
+        band_role: r.band_role === 'admin' ? 'admin' : 'member',
+        profile: {
+          first_name: r.first_name ?? null,
+          last_name: r.last_name ?? null,
+          email: r.email ?? null,
+        },
+      }));
+      setMembers(normalized);
+
+      // Pending invitations
+      const { data: invs } = await sb
+        .from('band_invitations')
+        .select('id, email, band_role, created_at, status')
+        .eq('band_id', bandId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      setInvites(invs ?? []);
+    } catch (e) {
+      console.error('fetchRoster error', e);
+    }
+  }, [sb, bandId]);
+
+  /**
+   * Initial load: auth + role + band + roster + invites
+   */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -100,7 +183,6 @@ export default function BandSheet({ bandId }: Props) {
           return;
         }
 
-        // 1) My role (use the real column "role" and alias it to band_role)
         step = 'membership:role';
         const { data: mem, error: memErr } = await sb
           .from('band_memberships')
@@ -115,7 +197,6 @@ export default function BandSheet({ bandId }: Props) {
         }
         setMyRole((mem.band_role as MembershipRole) ?? 'member');
 
-        // 2) Band name (maybeSingle + guard)
         step = 'bands:fetch';
         const { data: band, error: bandErr } = await sb
           .from('bands')
@@ -129,76 +210,11 @@ export default function BandSheet({ bandId }: Props) {
         }
         setBandName(band.name);
 
-        // 3) Roster (prefer the view; if it fails, fall back to two-step)
-        step = 'roster:view';
-        let roster: any[] | null = null;
-        {
-          const { data, error } = await sb
-            .from('band_member_profiles') // requires the view to exist
-            .select('user_id, band_role, email, first_name, last_name')
-            .eq('band_id', bandId);
-          if (error) {
-            console.warn(
-              'band_member_profiles view failed, will fallback:',
-              error
-            );
-          } else {
-            roster = data ?? [];
-          }
-        }
-
-        // Fallback path without the view
-        if (!roster) {
-          step = 'roster:memberships';
-          const { data: memberships, error: mErr } = await sb
-            .from('band_memberships')
-            .select('user_id, band_role')
-            .eq('band_id', bandId);
-          if (mErr) throw mErr;
-
-          const userIds = (memberships ?? []).map((r) => r.user_id);
-          const profilesById = new Map<string, ProfileLite>();
-
-          if (userIds.length) {
-            step = 'roster:profiles';
-            const { data: profs, error: pErr } = await sb
-              .from('profiles')
-              .select('id, first_name, last_name, email')
-              .in('id', userIds);
-            if (pErr) throw pErr;
-
-            (profs ?? []).forEach((p: any) =>
-              profilesById.set(p.id, {
-                first_name: p.first_name ?? null,
-                last_name: p.last_name ?? null,
-                email: p.email ?? null,
-              })
-            );
-          }
-
-          roster = (memberships ?? []).map((r: any) => ({
-            user_id: r.user_id,
-            band_role: r.band_role === 'admin' ? 'admin' : 'member',
-            first_name: profilesById.get(r.user_id)?.first_name ?? null,
-            last_name: profilesById.get(r.user_id)?.last_name ?? null,
-            email: profilesById.get(r.user_id)?.email ?? null,
-          }));
-        }
-
-        const normalized: MemberRow[] = roster.map((r: any) => ({
-          user_id: r.user_id,
-          band_role: r.band_role === 'admin' ? 'admin' : 'member',
-          profile: {
-            first_name: r.first_name ?? null,
-            last_name: r.last_name ?? null,
-            email: r.email ?? null,
-          },
-        }));
-
-        setMembers(normalized);
+        // Load roster + invites
+        await fetchRoster();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error('BandSheet load error at step:', e);
+        console.error('BandSheet load error at step:', step, e);
         setError(`Failed to load band (step: ${step}) — ${msg}`);
       } finally {
         if (alive) setLoading(false);
@@ -207,8 +223,11 @@ export default function BandSheet({ bandId }: Props) {
     return () => {
       alive = false;
     };
-  }, [sb, bandId]);
+  }, [sb, bandId, fetchRoster]);
 
+  /**
+   * Open Invite dialog via ?openInvite=1, then clean URL
+   */
   useEffect(() => {
     const sp = searchParams;
     if (!sp) return;
@@ -217,16 +236,46 @@ export default function BandSheet({ bandId }: Props) {
     if (shouldOpen) {
       setInviteOpen(true);
 
-      // Remove the param so it doesn't re-trigger on refresh/back
       const next = new URLSearchParams(sp.toString());
       next.delete('openInvite');
-
       const qs = next.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }
-    // We intentionally depend only on searchParams so it reacts to route changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  /**
+   * Realtime: refresh when memberships or invitations change for this band
+   */
+  useEffect(() => {
+    const channel = sb
+      .channel(`band:${bandId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'band_memberships',
+          filter: `band_id=eq.${bandId}`,
+        },
+        () => fetchRoster()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'band_invitations',
+          filter: `band_id=eq.${bandId}`,
+        },
+        () => fetchRoster()
+      )
+      .subscribe();
+
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [sb, bandId, fetchRoster]);
 
   const isAdmin = (myRole ?? 'member') === 'admin';
 
@@ -240,7 +289,6 @@ export default function BandSheet({ bandId }: Props) {
       } = await sb.auth.getSession();
       if (!session) throw new Error('Not signed in');
 
-      // basic client-side email check (optional)
       const email = inviteEmail.trim();
       if (!email) throw new Error('Please enter an email address');
 
@@ -252,7 +300,7 @@ export default function BandSheet({ bandId }: Props) {
         },
         body: JSON.stringify({
           email,
-          band_role: inviteRole, // <-- use the role from the dialog
+          band_role: inviteRole,
           bandName,
         }),
       });
@@ -269,21 +317,36 @@ export default function BandSheet({ bandId }: Props) {
         throw new Error(msg);
       }
 
-      // success: close and notify
-      setInviteOpen(false); // <-- close the *actual* dialog
+      // Close + toast
+      setInviteOpen(false);
       setInviteEmail('');
       setSnack({
         open: true,
         message: `Invite sent to ${email}`,
         severity: 'success',
       });
+
+      // Optimistic add
+      setInvites((prev) => [
+        {
+          id: crypto.randomUUID?.() ?? `${Date.now()}`,
+          email,
+          band_role: inviteRole,
+          created_at: new Date().toISOString(),
+          status: 'pending',
+        },
+        ...prev,
+      ]);
+
+      // Sync with DB (in case backend enriched/normalized anything)
+      fetchRoster();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Invite failed';
       setSnack({ open: true, message: msg, severity: 'error' });
     } finally {
       setSending(false);
     }
-  }, [bandId, inviteEmail, inviteRole, bandName]);
+  }, [bandId, inviteEmail, inviteRole, bandName, fetchRoster]);
 
   if (loading) {
     return (
@@ -357,22 +420,25 @@ export default function BandSheet({ bandId }: Props) {
         <Tab label="Chord Sheets" value="chords" />
       </Tabs>
 
-      {/* Panels (placeholder content) */}
+      {/* Panels */}
       {tab === 'overview' && (
         <Typography color="text.secondary" sx={{ mt: 2 }}>
           Quick stats, next event, recent activity…
         </Typography>
       )}
+
       {tab === 'events' && (
         <Typography color="text.secondary" sx={{ mt: 2 }}>
           Events list (filter, create, edit) goes here.
         </Typography>
       )}
+
       {tab === 'roster' && (
         <Box sx={{ mt: 2 }}>
           <Typography sx={{ mb: 1.5 }} color="text.secondary">
-            Members &amp; invitations
+            Members
           </Typography>
+
           {members.map((m) => (
             <Stack
               key={m.user_id}
@@ -385,9 +451,6 @@ export default function BandSheet({ bandId }: Props) {
                   `1px solid ${alpha(t.palette.primary.main, 0.12)}`,
               }}
             >
-              <Box sx={{ ml: 'auto' }}>
-                <RolePill role={m.band_role} size="small" />
-              </Box>
               <Typography sx={{ fontWeight: 700 }}>
                 {(m.profile?.first_name || '') +
                   ' ' +
@@ -396,10 +459,40 @@ export default function BandSheet({ bandId }: Props) {
               <Typography color="text.secondary">
                 {m.profile?.email ?? ''}
               </Typography>
+              <Box sx={{ flex: 1 }} />
+              <RolePill role={m.band_role} size="small" />
             </Stack>
           ))}
+
+          {/* Pending invitations */}
+          {invites.length > 0 && (
+            <>
+              <Typography sx={{ mt: 3, mb: 1.5 }} color="text.secondary">
+                Pending invitations
+              </Typography>
+              {invites.map((inv) => (
+                <Stack
+                  key={inv.id}
+                  direction="row"
+                  spacing={1.5}
+                  alignItems="center"
+                  sx={{
+                    py: 1,
+                    borderBottom: (t) =>
+                      `1px solid ${alpha(t.palette.primary.main, 0.12)}`,
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 700 }}>(Invited)</Typography>
+                  <Typography color="text.secondary">{inv.email}</Typography>
+                  <Box sx={{ flex: 1 }} />
+                  <RolePill role={inv.band_role} size="small" />
+                </Stack>
+              ))}
+            </>
+          )}
         </Box>
       )}
+
       {tab === 'chords' && (
         <Typography color="text.secondary" sx={{ mt: 2 }}>
           Chord sheets library for this band.

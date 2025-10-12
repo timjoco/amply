@@ -1,4 +1,3 @@
-// src/app/api/bands/[id]/invite/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,8 +7,8 @@ export const dynamic = 'force-dynamic';
 
 type BodyIn = {
   email?: string;
-  band_role?: 'member' | 'admin'; // preferred
-  role?: 'member' | 'admin'; // legacy alias; we normalize to band_role
+  band_role?: 'member' | 'admin';
+
   bandName?: string;
 };
 
@@ -27,7 +26,7 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
     // Parse & normalize body
     const raw = (await req.json()) as BodyIn;
     const email = raw.email?.trim().toLowerCase();
-    const band_role = (raw.band_role ?? raw.role)?.toLowerCase() as
+    const band_role = raw.band_role?.toLowerCase() as
       | 'member'
       | 'admin'
       | undefined;

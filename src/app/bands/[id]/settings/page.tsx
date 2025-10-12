@@ -1,6 +1,10 @@
 // app/bands/[id]/settings/page.tsx
-import { createClient } from '@/utils/supabase/server'; // your server helper
+import { Button, Container, Stack, Typography } from '@mui/material';
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+
+import { createClient } from '@/utils/supabase/server'; // your server helper
+import DangerZone from './DangerZone';
 
 export default async function BandSettingsPage({
   params,
@@ -8,29 +12,64 @@ export default async function BandSettingsPage({
   params: { id: string };
 }) {
   const supabase = createClient();
+
+  // Require auth
   const {
     data: { user },
-  } = await (await supabase).auth.getUser();
+    error: uErr,
+  } = await supabase.auth.getUser();
+  if (uErr) {
+    // If your helper can throw, you could surface a 500; redirect is friendlier.
+    redirect('/login');
+  }
   if (!user) redirect('/login');
 
-  // Basic fetch + admin check (server-side)
-  const { data: band } = await (await supabase)
+  // Fetch band (readable by member or admin)
+  const { data: band, error: bErr } = await supabase
     .from('bands')
     .select('id, name')
     .eq('id', params.id)
-    .single();
+    .maybeSingle();
+
+  if (bErr) notFound();
   if (!band) notFound();
 
-  const { data: isAdmin } = await (
-    await supabase
-  ).rpc('is_band_admin', { p_band_id: params.id });
+  // Is the current user an admin of this band?
+  // is_band_admin should return boolean
+  const { data: adminFlag, error: aErr } = await supabase.rpc('is_band_admin', {
+    p_band_id: params.id,
+  });
+
+  // If the RPC is missing or errors, default to false (member experience still works)
+  const isAdmin = aErr ? false : Boolean(adminFlag);
+
   return (
-    <div className="p-6 max-w-3xl">
-      <h1 className="text-2xl font-semibold mb-4">Band Settings</h1>
-      <DangerZone bandId={params.id} bandName={band.name} isAdmin={!!isAdmin} />
-    </div>
+    <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mb: 3 }}
+      >
+        <Typography variant="h4" fontWeight={700} letterSpacing={0.3}>
+          Band Settings
+        </Typography>
+        <Button
+          component={Link}
+          href={`/bands/${band.id}`}
+          variant="text"
+          size="small"
+          sx={{ textTransform: 'none' }}
+        >
+          Back to Band Page
+        </Button>
+      </Stack>
+
+      {/* This shows:
+          - Leave band (for members)
+          - Delete band (for admins)
+      */}
+      <DangerZone bandId={band.id} bandName={band.name} isAdmin={isAdmin} />
+    </Container>
   );
 }
-
-// Client island for actions
-import DangerZone from './DangerZone';

@@ -1,4 +1,3 @@
-// src/app/api/invites/[id]/accept/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
@@ -92,7 +91,6 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
       );
     }
     if (!invite.band_id || !isUuidLike(invite.band_id)) {
-      // This is the classic cause of your error — guard it.
       return NextResponse.json(
         { error: 'Invite has invalid band_id' },
         { status: 400 }
@@ -135,7 +133,7 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
     // 4) mark invite accepted
     const { error: updErr } = await supabaseAdmin
       .from('band_invitations')
-      .update({ status: 'accepted' }) // if you have accepted_at column, add it here.
+      .update({ status: 'accepted' })
       .eq('token', token);
     if (updErr) {
       return NextResponse.json(

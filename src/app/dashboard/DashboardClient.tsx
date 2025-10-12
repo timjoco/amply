@@ -75,12 +75,33 @@ export default function DashboardClient() {
           return;
         }
 
+        // ---- NEW: ensure a profile row exists (idempotent)
+        try {
+          const { error: rpcErr } = await sb.rpc('ensure_profile');
+          // If the RPC doesn't exist yet (e.g. 42883), just warn and continue
+          if (rpcErr) {
+            if (rpcErr.code === '42883') {
+              console.warn(
+                '[ensure_profile] RPC not found. Create it in SQL, or ignore this if profiles are created via trigger.'
+              );
+            } else {
+              console.warn('[ensure_profile] RPC error:', rpcErr.message);
+            }
+          }
+        } catch (e) {
+          console.warn('[ensure_profile] RPC call failed:', e);
+        }
+
         // greeting name (tolerate missing profile fields)
-        const { data: profile } = await sb
+        const { data: profile, error: pErr } = await sb
           .from('profiles')
           .select('first_name, email')
           .eq('id', user.id)
           .maybeSingle();
+
+        if (pErr) {
+          console.warn('profiles select error:', pErr.message);
+        }
 
         setGreetingName(profile?.first_name || profile?.email || 'there');
 

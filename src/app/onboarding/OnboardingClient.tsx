@@ -53,9 +53,17 @@ export default function OnboardingClient({ next = '/dashboard' }: Props) {
         setUserId(user.id);
         setEmail(user.email ?? null);
 
+        try {
+          const { error } = await sb.rpc('ensure_profile');
+          if (error && error.code !== '42883') {
+            console.warn('[ensure_profile] RPC error:', error.message);
+          }
+        } catch (e) {
+          console.warn('[ensure_profile] call failed:', e);
+        }
         const { data: profile, error: pErr } = await sb
           .from('profiles')
-          .select('first_name, location, onboarded')
+          .select('first_name, last_name, display_name, location, onboarded')
           .eq('id', user.id)
           .maybeSingle();
 

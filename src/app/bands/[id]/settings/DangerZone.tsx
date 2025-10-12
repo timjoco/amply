@@ -11,6 +11,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   TextField,
   Typography,
 } from '@mui/material';
@@ -26,19 +27,31 @@ export default function DangerZone({
   bandName: string;
   isAdmin: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [confirm, setConfirm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
 
+  // Delete band dialog state (admins)
+  const [openDelete, setOpenDelete] = useState(false);
+  const [confirm, setConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
+  // Leave band dialog state (members)
+  const [openLeave, setOpenLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveErr, setLeaveErr] = useState<string | null>(null);
+
+  // --- Delete band (admin only) ---
   const handleDelete = async () => {
-    setLoading(true);
-    setErr(null);
+    setDeleting(true);
+    setDeleteErr(null);
     try {
       const supabase = supabaseBrowser();
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      // Your existing Edge Function:
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-band`,
         {
@@ -50,15 +63,60 @@ export default function DangerZone({
           body: JSON.stringify({ bandId }),
         }
       );
-      if (!res.ok) throw new Error(await res.text());
+
+      if (!res.ok) {
+        const msg = (await res.text()) || 'Failed to delete band';
+        throw new Error(msg);
+      }
+
+      // Success: go to dashboard
+      router.replace('/dashboard');
+      router.refresh();
+    } catch (e: any) {
+      setDeleteErr(e.message ?? 'Failed to delete band');
+    } finally {
+      setDeleting(false);
+      setOpenDelete(false);
+    }
+  };
+
+  // --- Leave band (member only) ---
+  const handleLeave = async () => {
+    setLeaving(true);
+    setLeaveErr(null);
+    try {
+      const supabase = supabaseBrowser();
+      const rpc = await supabase.rpc('leave_band', { p_band: bandId });
+
+      if (rpc.error && rpc.error.code !== '42883') {
+        throw new Error(rpc.error.message);
+      }
+      if (!rpc.error) {
+      } else {
+        const {
+          data: { user },
+          error: uErr,
+        } = await supabase.auth.getUser();
+        if (uErr) throw uErr;
+        if (!user) throw new Error('Not authenticated');
+
+        const { error: dErr } = await supabase
+          .from('band_memberships')
+          .delete()
+          .eq('band_id', bandId)
+          .eq('user_id', user.id);
+
+        if (dErr) throw dErr;
+      }
+
       // Success: bounce to dashboard
       router.replace('/dashboard');
       router.refresh();
     } catch (e: any) {
-      setErr(e.message ?? 'Failed to delete band');
+      setLeaveErr(e.message ?? 'Failed to leave band');
     } finally {
-      setLoading(false);
-      setOpen(false);
+      setLeaving(false);
+      setOpenLeave(false);
     }
   };
 
@@ -68,6 +126,69 @@ export default function DangerZone({
         <Typography variant="h6" color="error" gutterBottom>
           Danger Zone
         </Typography>
+
+        {/* MEMBER: Leave band */}
+        {!isAdmin && (
+          <>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Leaving <b>{bandName}</b> removes your access to this band’s
+              events, chats, and files. You can rejoin only via a new invite
+              from an admin.
+            </Typography>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => setOpenLeave(true)}
+              sx={{ mb: 2, textTransform: 'none' }}
+            >
+              Leave band
+            </Button>
+
+            <Dialog
+              open={openLeave}
+              onClose={() => !leaving && setOpenLeave(false)}
+            >
+              <DialogTitle>Leave “{bandName}”?</DialogTitle>
+
+              <DialogContent>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  Type the band name to confirm. You’ll lose access immediately.
+                </Typography>
+                <TextField
+                  fullWidth
+                  autoFocus
+                  label="Type band name to confirm"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                />
+                {leaveErr && (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    {leaveErr}
+                  </Alert>
+                )}
+              </DialogContent>
+
+              <DialogActions>
+                <Button onClick={() => setOpenLeave(false)} disabled={leaving}>
+                  Cancel
+                </Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  onClick={handleLeave}
+                  disabled={leaving}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {leaving ? 'Leaving…' : 'Confirm leave'}
+                </Button>
+              </DialogActions>
+            </Dialog>
+
+            <Divider sx={{ my: 3 }} />
+          </>
+        )}
+
+        {/* ADMIN: Delete band */}
         <Typography variant="body2" sx={{ mb: 2 }}>
           Deleting <b>{bandName}</b> will remove the band, its events,
           memberships, and related data. This cannot be undone.
@@ -80,13 +201,14 @@ export default function DangerZone({
         <Button
           variant="contained"
           color="error"
-          onClick={() => setOpen(true)}
+          onClick={() => setOpenDelete(true)}
           disabled={!isAdmin}
+          sx={{ textTransform: 'none' }}
         >
-          Delete Band
+          Delete band
         </Button>
 
-        <Dialog open={open} onClose={() => setOpen(false)}>
+        <Dialog open={openDelete} onClose={() => setOpenDelete(false)}>
           <DialogTitle>Delete “{bandName}”?</DialogTitle>
           <DialogContent>
             <Typography variant="body2" sx={{ mb: 2 }}>
@@ -100,21 +222,24 @@ export default function DangerZone({
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
             />
-            {err && (
+            {deleteErr && (
               <Alert severity="error" sx={{ mt: 2 }}>
-                {err}
+                {deleteErr}
               </Alert>
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={() => setOpenDelete(false)} disabled={deleting}>
+              Cancel
+            </Button>
             <Button
               color="error"
               variant="contained"
-              disabled={confirm.trim() !== bandName || loading}
+              disabled={confirm.trim() !== bandName || deleting}
               onClick={handleDelete}
+              sx={{ textTransform: 'none' }}
             >
-              {loading ? 'Deleting…' : 'Delete'}
+              {deleting ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogActions>
         </Dialog>
