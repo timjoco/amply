@@ -1,6 +1,6 @@
 // components/AccountMenu.tsx
 'use client';
-import AccountAvatar from '@/components/AccountAvatar';
+import AccountAvatar from '@/components/Profile/AccountAvatar';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';

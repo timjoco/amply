@@ -1,20 +1,37 @@
 'use client';
 
-import AccountAvatar from '@/components/AccountAvatar';
-import AccountMenu from '@/components/AccountMenu';
+import AccountAvatar from '@/components/Profile/AccountAvatar';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
 import LibraryMusicOutlinedIcon from '@mui/icons-material/LibraryMusicOutlined';
 import DashboardIcon from '@mui/icons-material/SpaceDashboard';
-import { BottomNavigation, BottomNavigationAction, Paper } from '@mui/material';
-import { useRouter } from 'next/navigation';
+import {
+  BottomNavigation,
+  BottomNavigationAction,
+  Box,
+  Paper,
+} from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+
+const navItems = [
+  { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
+  { href: '/bands', label: 'Bands', Icon: LibraryMusicOutlinedIcon },
+  { href: '/events', label: 'Events', Icon: EventOutlinedIcon },
+  // index 3 = Account (/settings)
+];
 
 export default function BottomNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const sb = useMemo(() => supabaseBrowser(), []);
   const [initials, setInitials] = useState('U');
-  const [acctAnchor, setAcctAnchor] = useState<HTMLElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -48,45 +65,122 @@ export default function BottomNav() {
     })();
   }, [sb]);
 
-  return (
-    <>
-      <Paper
-        elevation={8}
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          display: { xs: 'block', md: 'none' },
-          zIndex: (t) => t.zIndex.fab,
-        }}
-      >
-        <BottomNavigation showLabels>
-          <BottomNavigationAction
-            icon={<DashboardIcon />}
-            onClick={() => router.push('/dashboard')}
-          />
-          <BottomNavigationAction
-            icon={<LibraryMusicOutlinedIcon />}
-            onClick={() => router.push('/bands')}
-          />
-          <BottomNavigationAction
-            icon={<EventOutlinedIcon />}
-            onClick={() => router.push('/events')}
-          />
-          <BottomNavigationAction
-            icon={<AccountAvatar size={24}>{initials}</AccountAvatar>}
-            onClick={(e) => setAcctAnchor(e.currentTarget)}
-          />
-        </BottomNavigation>
-      </Paper>
+  // Compute selected index (only after mount to avoid SSR mismatch)
+  const selectedIndex = mounted
+    ? pathname?.startsWith('/settings')
+      ? 3
+      : (() => {
+          const idx = navItems.findIndex((i) => pathname?.startsWith(i.href));
+          return idx === -1 ? 0 : idx;
+        })()
+    : 0; // placeholder during SSR (won't render anyway)
 
-      <AccountMenu
-        size={40}
-        anchorEl={acctAnchor}
-        open={Boolean(acctAnchor)}
-        onClose={() => setAcctAnchor(null)}
-      />
-    </>
+  // Avoid SSR/CSR mismatch by not rendering until mounted
+  if (!mounted) return null;
+
+  return (
+    <Paper
+      elevation={8}
+      sx={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        display: { xs: 'block', md: 'none' },
+        zIndex: (t) => t.zIndex.fab,
+      }}
+    >
+      <BottomNavigation
+        value={selectedIndex}
+        onChange={(_e, newValue) => {
+          const href = newValue === 3 ? '/settings' : navItems[newValue]?.href;
+          if (href) router.push(href);
+        }}
+        showLabels
+        sx={(t) => ({
+          px: 0.25,
+
+          // pop animation
+          '@keyframes pop': {
+            '0%': { transform: 'scale(1)' },
+            '50%': { transform: 'scale(1.12)' },
+            '100%': { transform: 'scale(1)' },
+          },
+
+          '& .MuiBottomNavigationAction-root': {
+            minWidth: 0,
+            mx: 0.25,
+            px: 0.25,
+            borderRadius: 2,
+            color: alpha(t.palette.text.primary, 0.6), // default grey
+
+            '& .MuiSvgIcon-root': {
+              fontSize: 22,
+              transition: 'color .15s ease, transform .15s ease',
+            },
+
+            // Tiny labels
+            '& .MuiBottomNavigationAction-label': {
+              fontSize: 10,
+              lineHeight: 1,
+              letterSpacing: 0.2,
+              marginTop: 2,
+              transition: 'color .15s ease, opacity .15s ease',
+              opacity: 0.85,
+            },
+
+            // No bg on hover/selected
+            '&:hover': {
+              backgroundColor: 'transparent',
+              color: alpha(t.palette.text.primary, 0.8),
+            },
+
+            // Selected: white icon/label + pop
+            '&.Mui-selected': {
+              color: t.palette.common.white,
+              backgroundColor: 'transparent',
+              '& .MuiSvgIcon-root': { animation: 'pop 180ms ease-out' },
+              '& .MuiBottomNavigationAction-label': { opacity: 1 },
+              '& .MuiAvatar-root': { animation: 'pop 180ms ease-out' },
+            },
+          },
+
+          // optional: dim unselected a bit more in dark mode
+          ...(t.palette.mode === 'dark' && {
+            '& .MuiBottomNavigationAction-root:not(.Mui-selected)': {
+              color: alpha(t.palette.common.white, 0.75),
+            },
+          }),
+        })}
+      >
+        {navItems.map(({ href, label, Icon }) => (
+          <BottomNavigationAction key={href} label={label} icon={<Icon />} />
+        ))}
+
+        {/* Account tab (index 3) */}
+        <BottomNavigationAction
+          label="Account"
+          icon={
+            <Box
+              sx={(t) => ({
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                '& .MuiAvatar-root': {
+                  color: 'currentColor', // initials follow selected (white) vs grey
+                  border: `2px solid ${alpha(t.palette.text.primary, 0.4)}`,
+                },
+                '.Mui-selected & .MuiAvatar-root': {
+                  borderColor: alpha(t.palette.common.white, 0.8),
+                },
+              })}
+            >
+              <AccountAvatar size={24}>{initials}</AccountAvatar>
+            </Box>
+          }
+          onClick={() => router.push('/settings')}
+        />
+      </BottomNavigation>
+    </Paper>
   );
 }
