@@ -28,6 +28,7 @@ export default function DangerZone({
   isAdmin: boolean;
 }) {
   const router = useRouter();
+  const supabase = supabaseBrowser(); // ✅ reuse your browser client
 
   // Delete band dialog state (admins)
   const [openDelete, setOpenDelete] = useState(false);
@@ -41,58 +42,63 @@ export default function DangerZone({
   const [leaveErr, setLeaveErr] = useState<string | null>(null);
 
   // --- Delete band (admin only) ---
-  const handleDelete = async () => {
-    setDeleting(true);
-    setDeleteErr(null);
+  async function handleDelete() {
     try {
-      const supabase = supabaseBrowser();
+      setDeleting(true);
+      setDeleteErr(null);
+
+      // Get user access token (optional but recommended if your function validates admin via user JWT)
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const accessToken = session?.access_token;
 
-      // Your existing Edge Function:
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-band`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            // IMPORTANT: both headers for the functions gateway
+            Authorization: `Bearer ${
+              accessToken ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+            }`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
-          body: JSON.stringify({ bandId }),
+          body: JSON.stringify({ band_id: bandId }), // ✅ use the prop
         }
       );
 
       if (!res.ok) {
-        const msg = (await res.text()) || 'Failed to delete band';
-        throw new Error(msg);
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Delete failed (${res.status})`);
       }
 
-      // Success: go to dashboard
+      // Success → close dialog and go back to dashboard
+      setOpenDelete(false);
       router.replace('/dashboard');
       router.refresh();
     } catch (e: any) {
-      setDeleteErr(e.message ?? 'Failed to delete band');
+      setDeleteErr(e?.message ?? 'Failed to delete band');
     } finally {
       setDeleting(false);
-      setOpenDelete(false);
     }
-  };
+  }
 
   // --- Leave band (member only) ---
   const handleLeave = async () => {
     setLeaving(true);
     setLeaveErr(null);
     try {
-      const supabase = supabaseBrowser();
+      // Try RPC if present; otherwise fallback delete of own membership
       const rpc = await supabase.rpc('leave_band', { p_band: bandId });
 
       if (rpc.error && rpc.error.code !== '42883') {
+        // 42883 = function undefined; fallback below
         throw new Error(rpc.error.message);
       }
-      if (!rpc.error) {
-      } else {
+
+      if (rpc.error) {
         const {
           data: { user },
           error: uErr,
@@ -109,7 +115,6 @@ export default function DangerZone({
         if (dErr) throw dErr;
       }
 
-      // Success: bounce to dashboard
       router.replace('/dashboard');
       router.refresh();
     } catch (e: any) {
@@ -119,6 +124,8 @@ export default function DangerZone({
       setOpenLeave(false);
     }
   };
+
+  const confirmMatches = confirm.trim() === bandName; // or case-insensitive if you prefer
 
   return (
     <Card variant="outlined" sx={{ borderColor: 'error.main', mt: 6 }}>
@@ -176,7 +183,7 @@ export default function DangerZone({
                   color="error"
                   variant="contained"
                   onClick={handleLeave}
-                  disabled={leaving}
+                  disabled={leaving || !confirmMatches}
                   sx={{ textTransform: 'none' }}
                 >
                   {leaving ? 'Leaving…' : 'Confirm leave'}
@@ -208,7 +215,10 @@ export default function DangerZone({
           Delete band
         </Button>
 
-        <Dialog open={openDelete} onClose={() => setOpenDelete(false)}>
+        <Dialog
+          open={openDelete}
+          onClose={() => !deleting && setOpenDelete(false)}
+        >
           <DialogTitle>Delete “{bandName}”?</DialogTitle>
           <DialogContent>
             <Typography variant="body2" sx={{ mb: 2 }}>
@@ -235,8 +245,8 @@ export default function DangerZone({
             <Button
               color="error"
               variant="contained"
-              disabled={confirm.trim() !== bandName || deleting}
-              onClick={handleDelete}
+              disabled={!confirmMatches || deleting}
+              onClick={handleDelete} // ✅ no missing arg
               sx={{ textTransform: 'none' }}
             >
               {deleting ? 'Deleting…' : 'Delete'}

@@ -1,46 +1,39 @@
 // app/bands/[id]/settings/page.tsx
+import { createClient } from '@/utils/supabase/server';
 import { Button, Container, Stack, Typography } from '@mui/material';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-
-import { createClient } from '@/utils/supabase/server'; // your server helper
 import DangerZone from './DangerZone';
 
 export default async function BandSettingsPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const supabase = createClient();
 
-  // Require auth
+  const { id } = await params;
+
+  // Auth guard
   const {
     data: { user },
     error: uErr,
   } = await supabase.auth.getUser();
-  if (uErr) {
-    // If your helper can throw, you could surface a 500; redirect is friendlier.
-    redirect('/login');
-  }
-  if (!user) redirect('/login');
+  if (uErr || !user) redirect('/login');
 
-  // Fetch band (readable by member or admin)
+  // Fetch band
   const { data: band, error: bErr } = await supabase
     .from('bands')
     .select('id, name')
-    .eq('id', params.id)
-    .maybeSingle();
+    .eq('id', id)
+    .single();
 
-  if (bErr) notFound();
-  if (!band) notFound();
+  if (bErr || !band) notFound();
 
-  // Is the current user an admin of this band?
-  // is_band_admin should return boolean
+  // Is current user an admin?
   const { data: adminFlag, error: aErr } = await supabase.rpc('is_band_admin', {
-    p_band_id: params.id,
+    p_band_id: id,
   });
-
-  // If the RPC is missing or errors, default to false (member experience still works)
   const isAdmin = aErr ? false : Boolean(adminFlag);
 
   return (
@@ -65,10 +58,7 @@ export default async function BandSettingsPage({
         </Button>
       </Stack>
 
-      {/* This shows:
-          - Leave band (for members)
-          - Delete band (for admins)
-      */}
+      {/* Danger zone: leave/delete actions */}
       <DangerZone bandId={band.id} bandName={band.name} isAdmin={isAdmin} />
     </Container>
   );
