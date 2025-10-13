@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 type BodyIn = {
   email?: string;
-  band_role?: 'member' | 'admin';
+  role?: 'member' | 'admin';
 
   bandName?: string;
 };
@@ -26,15 +26,12 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
     // Parse & normalize body
     const raw = (await req.json()) as BodyIn;
     const email = raw.email?.trim().toLowerCase();
-    const band_role = raw.band_role?.toLowerCase() as
-      | 'member'
-      | 'admin'
-      | undefined;
+    const role = raw.role?.toLowerCase() as 'member' | 'admin' | undefined;
     const bandName = raw.bandName?.toString();
 
-    if (!email || !band_role) {
+    if (!email || !role) {
       return NextResponse.json(
-        { error: 'email and band_role are required' },
+        { error: 'email and role are required' },
         { status: 400 }
       );
     }
@@ -55,12 +52,12 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Insert or update pending invite; column is `band_role`
+    // Insert or update pending invite; column is `role`
     let token: string | null = null;
 
     const insertRes = await supabaseRls
       .from('band_invitations')
-      .insert([{ band_id: bandId, email, band_role, status: 'pending' }])
+      .insert([{ band_id: bandId, email, role, status: 'pending' }])
       .select('token')
       .single();
 
@@ -68,7 +65,7 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
       if ((insertRes.error as any).code === '23505') {
         const updRes = await supabaseRls
           .from('band_invitations')
-          .update({ band_role })
+          .update({ role })
           .eq('band_id', bandId)
           .eq('email', email)
           .eq('status', 'pending')
@@ -128,7 +125,7 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
       );
     }
 
-    return NextResponse.json({ ok: true, token, acceptUrl, band_role });
+    return NextResponse.json({ ok: true, token, acceptUrl, role });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(

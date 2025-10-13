@@ -29,7 +29,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-type BandWithRole = Band & { band_role: MembershipRole };
+type BandWithRole = Band & { role: MembershipRole };
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -75,6 +75,9 @@ export default function DashboardClient() {
           return;
         }
 
+        const { error } = await sb.rpc('ensure_profile');
+        if (error) console.warn('ensure_profile error:', error.message);
+
         // ---- NEW: ensure a profile row exists (idempotent)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
@@ -107,8 +110,8 @@ export default function DashboardClient() {
 
         // load bands via memberships
         const { data: rows, error: mErr } = await sb
-          .from('band_memberships')
-          .select('band_role, bands(id, name)')
+          .from('band_members')
+          .select('role, bands(id, name)')
           .eq('user_id', user.id);
 
         if (mErr) throw mErr;
@@ -120,7 +123,7 @@ export default function DashboardClient() {
               ? {
                   id: r.bands.id as string,
                   name: r.bands.name as string,
-                  band_role: r.band_role as MembershipRole,
+                  role: r.role as MembershipRole,
                 }
               : null
           )
@@ -154,8 +157,8 @@ export default function DashboardClient() {
     if (!user) return;
 
     const { data: rows, error } = await sb
-      .from('band_memberships')
-      .select('band_role, bands(id, name)')
+      .from('band_members')
+      .select('role, bands(id, name)')
       .eq('user_id', user.id);
     if (error) throw error;
 
@@ -166,7 +169,7 @@ export default function DashboardClient() {
           ? {
               id: r.bands.id as string,
               name: r.bands.name as string,
-              band_role: r.band_role as MembershipRole,
+              role: r.role as MembershipRole,
             }
           : null
       )
@@ -291,12 +294,7 @@ export default function DashboardClient() {
         <Box sx={gridSx}>
           {isMdUp && <AddBandTile onClick={() => setCreateOpen(true)} />}
           {bands.map((b) => (
-            <BandCard
-              key={b.id}
-              id={b.id}
-              name={b.name}
-              bandRole={b.band_role}
-            />
+            <BandCard key={b.id} id={b.id} name={b.name} bandRole={b.role} />
           ))}
         </Box>
       )}

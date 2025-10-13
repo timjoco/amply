@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
     // 2a) fetch invite (must be pending)
     const { data: invite, error: inviteErr } = await supabaseAdmin
       .from('band_invitations')
-      .select('token, status, band_id, band_role, email')
+      .select('token, status, band_id, role, email')
       .eq('token', token)
       .maybeSingle();
 
@@ -114,12 +114,12 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
     // 3) upsert membership for this user + band
     // use service role but explicit user_id from the JWT to avoid RLS complexity
     const { error: upsertErr } = await supabaseAdmin
-      .from('band_memberships')
+      .from('band_members')
       .upsert(
         {
           band_id: invite.band_id,
           user_id: authedUserId,
-          band_role: invite.band_role ?? 'member',
+          role: invite.role ?? 'member',
         },
         { onConflict: 'band_id,user_id' }
       );
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest, ctx: { params: any }) {
     return NextResponse.json({
       ok: true,
       band_id: invite.band_id,
-      band_role: invite.band_role ?? 'member',
+      role: invite.role ?? 'member',
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

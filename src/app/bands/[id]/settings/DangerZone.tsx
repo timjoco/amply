@@ -101,7 +101,7 @@ export default function DangerZone({
         if (!user) throw new Error('Not authenticated');
 
         const { error: dErr } = await supabase
-          .from('band_memberships')
+          .from('band_members')
           .delete()
           .eq('band_id', bandId)
           .eq('user_id', user.id);

@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import BandActionsDialog from './BandActionsDialog';
 
+// this component is the header on a band sheet
 export default function BandTitleMenu({
   bandId,
   bandName,
@@ -52,7 +53,7 @@ export default function BandTitleMenu({
             gap: 1.5,
             px: 2,
             py: 1,
-            cursor: 'pointer', // explicit, though <button> already uses pointer
+            cursor: 'pointer',
             userSelect: 'none',
             borderRadius: 2,
             color: 'text.primary',
@@ -89,14 +90,14 @@ export default function BandTitleMenu({
   return (
     <>
       <ButtonBase
-        component="button" // real <button>
+        component="button"
         type="button"
         onClick={handleToggle}
         disableRipple
         sx={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 1.5,
+          gap: 1,
           px: 2.25,
           py: 1.25,
           cursor: 'pointer',
@@ -158,7 +159,7 @@ export default function BandTitleMenu({
             sx={{
               py: 1.25,
               px: 1.75,
-              gap: 1.25,
+              gap: 1,
               '& .MuiListItemIcon-root': { minWidth: 44 },
               '& .MuiSvgIcon-root': { fontSize: 22 },
               '&:hover': (t) => ({
@@ -187,7 +188,7 @@ export default function BandTitleMenu({
           sx={{
             py: 1.25, // taller row
             px: 1.75, // wider gutters
-            gap: 1.25, // space between icon & text
+            gap: 1, // space between icon & text
             '& .MuiListItemIcon-root': {
               minWidth: 44,
             },

@@ -37,7 +37,7 @@ type ProfileLite = {
 
 type MemberRow = {
   user_id: string;
-  band_role: MembershipRole;
+  role: MembershipRole;
   profile: ProfileLite | null;
 };
 
@@ -48,7 +48,7 @@ type Props = {
 type InvitationRow = {
   id: string;
   email: string;
-  band_role: MembershipRole;
+  role: MembershipRole;
   created_at: string;
   status: 'pending' | 'accepted' | 'expired' | 'revoked';
 };
@@ -94,7 +94,7 @@ export default function BandSheet({ bandId }: Props) {
       {
         const { data, error } = await sb
           .from('band_member_profiles')
-          .select('user_id, band_role, email, first_name, last_name')
+          .select('user_id, role, email, first_name, last_name')
           .eq('band_id', bandId);
         if (!error) {
           roster = data ?? [];
@@ -104,8 +104,8 @@ export default function BandSheet({ bandId }: Props) {
       // Fallback: memberships + profiles
       if (!roster) {
         const { data: memberships, error: mErr } = await sb
-          .from('band_memberships')
-          .select('user_id, band_role')
+          .from('band_members')
+          .select('user_id, role')
           .eq('band_id', bandId);
         if (mErr) throw mErr;
 
@@ -128,7 +128,7 @@ export default function BandSheet({ bandId }: Props) {
 
         roster = (memberships ?? []).map((r: any) => ({
           user_id: r.user_id,
-          band_role: r.band_role === 'admin' ? 'admin' : 'member',
+          role: r.role === 'admin' ? 'admin' : 'member',
           first_name: profilesById.get(r.user_id)?.first_name ?? null,
           last_name: profilesById.get(r.user_id)?.last_name ?? null,
           email: profilesById.get(r.user_id)?.email ?? null,
@@ -137,7 +137,7 @@ export default function BandSheet({ bandId }: Props) {
 
       const normalized: MemberRow[] = (roster ?? []).map((r: any) => ({
         user_id: r.user_id,
-        band_role: r.band_role === 'admin' ? 'admin' : 'member',
+        role: r.role === 'admin' ? 'admin' : 'member',
         profile: {
           first_name: r.first_name ?? null,
           last_name: r.last_name ?? null,
@@ -149,7 +149,7 @@ export default function BandSheet({ bandId }: Props) {
       // Pending invitations
       const { data: invs } = await sb
         .from('band_invitations')
-        .select('id, email, band_role, created_at, status')
+        .select('id, email, role, created_at, status')
         .eq('band_id', bandId)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
@@ -185,8 +185,8 @@ export default function BandSheet({ bandId }: Props) {
 
         step = 'membership:role';
         const { data: mem, error: memErr } = await sb
-          .from('band_memberships')
-          .select('band_role')
+          .from('band_members')
+          .select('role')
           .eq('band_id', bandId)
           .eq('user_id', user.id)
           .maybeSingle();
@@ -195,7 +195,7 @@ export default function BandSheet({ bandId }: Props) {
           setError('You do not have access to this band (no membership).');
           return;
         }
-        setMyRole((mem.band_role as MembershipRole) ?? 'member');
+        setMyRole((mem.role as MembershipRole) ?? 'member');
 
         step = 'bands:fetch';
         const { data: band, error: bandErr } = await sb
@@ -255,7 +255,7 @@ export default function BandSheet({ bandId }: Props) {
         {
           event: '*',
           schema: 'public',
-          table: 'band_memberships',
+          table: 'band_members',
           filter: `band_id=eq.${bandId}`,
         },
         () => fetchRoster()
@@ -300,7 +300,7 @@ export default function BandSheet({ bandId }: Props) {
         },
         body: JSON.stringify({
           email,
-          band_role: inviteRole,
+          role: inviteRole,
           bandName,
         }),
       });
@@ -331,7 +331,7 @@ export default function BandSheet({ bandId }: Props) {
         {
           id: crypto.randomUUID?.() ?? `${Date.now()}`,
           email,
-          band_role: inviteRole,
+          role: inviteRole,
           created_at: new Date().toISOString(),
           status: 'pending',
         },
@@ -460,7 +460,7 @@ export default function BandSheet({ bandId }: Props) {
                 {m.profile?.email ?? ''}
               </Typography>
               <Box sx={{ flex: 1 }} />
-              <RolePill role={m.band_role} size="small" />
+              <RolePill role={m.role} size="small" />
             </Stack>
           ))}
 
@@ -485,7 +485,7 @@ export default function BandSheet({ bandId }: Props) {
                   <Typography sx={{ fontWeight: 700 }}>(Invited)</Typography>
                   <Typography color="text.secondary">{inv.email}</Typography>
                   <Box sx={{ flex: 1 }} />
-                  <RolePill role={inv.band_role} size="small" />
+                  <RolePill role={inv.role} size="small" />
                 </Stack>
               ))}
             </>

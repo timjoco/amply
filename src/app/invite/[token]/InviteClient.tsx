@@ -9,7 +9,7 @@ type InvitePreview = {
   token: string;
   bandId: string;
   email: string;
-  band_role: 'member' | 'admin' | null;
+  role: 'member' | 'admin' | null;
   status: 'pending' | 'accepted' | 'revoked' | 'expired';
   bandName?: string | null;
   inviterEmail?: string | null;
@@ -132,7 +132,7 @@ export default function InviteClient({ token }: { token: string }) {
       <p>
         You were invited{' '}
         {invite.inviterEmail ? `by ${invite.inviterEmail}` : ''} to join as{' '}
-        <b>{invite.band_role ?? 'member'}</b>.
+        <b>{invite.role ?? 'member'}</b>.
       </p>
       {invite.status !== 'pending' ? (
         <p style={{ color: 'crimson' }}>

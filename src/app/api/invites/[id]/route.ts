@@ -25,10 +25,10 @@ export async function GET(_req: NextRequest, ctx: { params: any }) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Band invitations now store role in `band_role`
+    // Band invitations now store role in `role`
     const { data: invite, error } = await supabaseAdmin
       .from('band_invitations')
-      .select('token, status, band_role, band_id, created_at, email')
+      .select('token, status, role, band_id, created_at, email')
       .eq('token', token)
       .maybeSingle();
 
@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest, ctx: { params: any }) {
       invite: {
         token: invite.token,
         status: invite.status,
-        band_role: invite.band_role, // <- unified key
+        role: invite.role, // <- unified key
         band_id: invite.band_id,
         email: invite.email,
         created_at: invite.created_at,

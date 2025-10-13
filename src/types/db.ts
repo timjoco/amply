@@ -9,6 +9,6 @@ export type Band = {
 export type BandMembershipRow = {
   band_id: string;
   user_id: string;
-  band_role: MembershipRole;
+  role: MembershipRole;
   created_at: string;
 };
