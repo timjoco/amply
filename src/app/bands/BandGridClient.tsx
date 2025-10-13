@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 'use client';
 
+import AddBandTile from '@/components/Bands/AddBandTile'; // ⬅️ back in
 import BandCard from '@/components/Bands/BandCard';
 import EmptyStateStartBand from '@/components/Bands/EmptyStateStartBand';
 import { supabaseBrowser } from '@/lib/supabaseClient';
@@ -36,8 +36,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-// If you want to seed via props, pass BandWithRole[] (same as Dashboard)
-export default function BandsGridClient({}) {
+export default function BandsGridClient() {
   const router = useRouter();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
 
@@ -86,7 +85,6 @@ export default function BandsGridClient({}) {
         setLoading(true);
         setError(null);
 
-        // Ensure session
         const {
           data: { user },
           error: userErr,
@@ -99,7 +97,6 @@ export default function BandsGridClient({}) {
           return;
         }
 
-        // Ensure a profile row exists (idempotent)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
           if (rpcErr && rpcErr.code !== '42883') {
@@ -109,8 +106,6 @@ export default function BandsGridClient({}) {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
-        // Load bands via memberships
-        // Prefer using your FK name to force object join. If unsure, the mapper handles arrays too.
         const { data: rows, error: mErr } = await sb
           .from('band_members')
           .select('role, bands(id, name)')
@@ -238,6 +233,15 @@ export default function BandsGridClient({}) {
         <EmptyStateStartBand onCreate={() => setCreateOpen(true)} />
       ) : (
         <Box sx={gridSx}>
+          {isMdUp && (
+            <AddBandTile
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement)?.blur(); // <-- new
+                setCreateOpen(true);
+              }}
+            />
+          )}
+
           {bands.map((b) => (
             <BandCard key={b.id} id={b.id} name={b.name} bandRole={b.role} />
           ))}
@@ -249,7 +253,10 @@ export default function BandsGridClient({}) {
         <Fab
           color="primary"
           aria-label="Create band"
-          onClick={() => setCreateOpen(true)}
+          onClick={(e) => {
+            (e.currentTarget as HTMLElement)?.blur(); // <-- new
+            setCreateOpen(true);
+          }}
           sx={{
             position: 'fixed',
             right: 16,

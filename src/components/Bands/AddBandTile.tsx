@@ -3,7 +3,11 @@
 import AddIcon from '@mui/icons-material/Add';
 import { Box, Card, CardActionArea, Typography } from '@mui/material';
 
-type Props = { onClick: () => void; height?: number };
+type Props = {
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+  height?: number;
+};
 
 export default function AddBandTile({ onClick, height = 220 }: Props) {
   return (

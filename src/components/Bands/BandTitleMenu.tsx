@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import BandActionsDialog from './BandActionsDialog';
 
+// this is the band  drop menu on desktop (click band name)
 export default function BandTitleMenu({
   bandId,
   bandName,
@@ -32,11 +33,9 @@ export default function BandTitleMenu({
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
 
-  // Desktop dropdown state
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const open = Boolean(anchorEl);
 
-  // Mobile dialog state
   const [actionsOpen, setActionsOpen] = useState(false);
 
   // ---------- Mobile: opens actions dialog ----------
@@ -74,7 +73,6 @@ export default function BandTitleMenu({
                 display: 'block',
                 fontWeight: 900,
                 lineHeight: 1.15,
-                // Shrinks on small screens; single line with ellipsis
                 fontSize: 'clamp(18px, 5.2vw, 22px)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -138,7 +136,6 @@ export default function BandTitleMenu({
               display: 'block',
               fontWeight: 900,
               lineHeight: 1.05,
-              // Scales down a bit on narrower desktops
               fontSize: 'clamp(24px, 4vw, 40px)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -193,7 +190,7 @@ export default function BandTitleMenu({
             }}
           >
             <ListItemText
-              primary="Invite member"
+              primary="Invite Band Members"
               primaryTypographyProps={{
                 fontSize: 15,
                 fontWeight: 700,

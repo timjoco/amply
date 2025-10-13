@@ -67,5 +67,5 @@ export default async function BandsPage() {
     return <div>No bands yet — create or join one!</div>;
   }
 
-  return <BandGridClient bands={bands} />;
+  return <BandGridClient />;
 }
