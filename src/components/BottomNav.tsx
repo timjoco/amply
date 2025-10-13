@@ -73,9 +73,8 @@ export default function BottomNav() {
           const idx = navItems.findIndex((i) => pathname?.startsWith(i.href));
           return idx === -1 ? 0 : idx;
         })()
-    : 0; // placeholder during SSR (won't render anyway)
+    : 0;
 
-  // Avoid SSR/CSR mismatch by not rendering until mounted
   if (!mounted) return null;
 
   return (
@@ -112,7 +111,7 @@ export default function BottomNav() {
             mx: 0.25,
             px: 0.25,
             borderRadius: 2,
-            color: alpha(t.palette.text.primary, 0.6), // default grey
+            color: alpha(t.palette.text.primary, 0.6),
 
             '& .MuiSvgIcon-root': {
               fontSize: 22,
@@ -124,7 +123,7 @@ export default function BottomNav() {
               fontSize: 10,
               lineHeight: 1,
               letterSpacing: 0.2,
-              marginTop: 2,
+              marginTop: 0.75,
               transition: 'color .15s ease, opacity .15s ease',
               opacity: 0.85,
             },
