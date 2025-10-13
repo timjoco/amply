@@ -1,7 +1,7 @@
-import AppFrame from '@/components/AppFrame';
-import EmotionRegistry from '@/components/EmotionRegistry';
-import FooterGuard from '@/components/FooterGuard';
-import ThemeClient from '@/components/ThemeClient';
+import FooterGuard from '@/components/Footers/FooterGuard';
+import AppFrame from '@/components/Styling/AppFrame';
+import EmotionRegistry from '@/components/Styling/EmotionRegistry';
+import ThemeClient from '@/components/Styling/ThemeClient';
 import type { Metadata } from 'next';
 import './globals.css';
 
