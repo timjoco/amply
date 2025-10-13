@@ -1,4 +1,3 @@
-// components/Bands/BandTitleMenu.tsx
 'use client';
 
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -7,11 +6,13 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import SettingsIcon from '@mui/icons-material/Settings';
 import {
+  Box,
   ButtonBase,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
+  Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -19,18 +20,17 @@ import Link from 'next/link';
 import { useState } from 'react';
 import BandActionsDialog from './BandActionsDialog';
 
-// this component is the header on a band sheet
 export default function BandTitleMenu({
   bandId,
   bandName,
-  onInvite, // pass only for admins
+  onInvite,
 }: {
   bandId: string;
   bandName: string;
   onInvite?: () => void;
 }) {
   const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
 
   // Desktop dropdown state
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -39,24 +39,25 @@ export default function BandTitleMenu({
   // Mobile dialog state
   const [actionsOpen, setActionsOpen] = useState(false);
 
+  // ---------- Mobile: opens actions dialog ----------
   if (!isDesktop) {
     return (
       <>
         <ButtonBase
-          component="button" // real <button>
           type="button"
           onClick={() => setActionsOpen(true)}
           disableRipple
           sx={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 1.5,
+            gap: 0.5,
             px: 2,
             py: 1,
             cursor: 'pointer',
             userSelect: 'none',
             borderRadius: 2,
             color: 'text.primary',
+            maxWidth: '100%',
             '& svg': { cursor: 'pointer' },
             '&:focus-visible': {
               outline: (t) => `2px solid ${t.palette.primary.main}`,
@@ -66,10 +67,25 @@ export default function BandTitleMenu({
           }}
           aria-label={`Open ${bandName} actions`}
         >
-          <span style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>
-            {bandName}
-          </span>
-          <ChevronRightIcon sx={{ fontSize: 28 }} />
+          <Box sx={{ minWidth: 0, maxWidth: '80vw', flex: '1 1 auto' }}>
+            <Typography
+              component="span"
+              sx={{
+                display: 'block',
+                fontWeight: 900,
+                lineHeight: 1.15,
+                // Shrinks on small screens; single line with ellipsis
+                fontSize: 'clamp(18px, 5.2vw, 22px)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+              title={bandName}
+            >
+              {bandName}
+            </Typography>
+          </Box>
+          <ChevronRightIcon sx={{ fontSize: 22, flex: '0 0 auto' }} />
         </ButtonBase>
 
         <BandActionsDialog
@@ -83,14 +99,13 @@ export default function BandTitleMenu({
     );
   }
 
-  // ——— Desktop: dropdown menu ———
+  // ---------- Desktop: dropdown menu ----------
   const handleToggle = (e: React.MouseEvent<HTMLElement>) =>
     setAnchorEl(open ? null : e.currentTarget);
 
   return (
     <>
       <ButtonBase
-        component="button"
         type="button"
         onClick={handleToggle}
         disableRipple
@@ -110,18 +125,34 @@ export default function BandTitleMenu({
             outlineOffset: 2,
             borderRadius: 6,
           },
+          maxWidth: '100%',
         }}
         aria-haspopup="menu"
         aria-expanded={open ? 'true' : undefined}
         aria-label={open ? `Close ${bandName} menu` : `Open ${bandName} menu`}
       >
-        <span style={{ fontSize: 40, fontWeight: 900, lineHeight: 1.05 }}>
-          {bandName}
-        </span>
+        <Box sx={{ minWidth: 0, maxWidth: '60vw' }}>
+          <Typography
+            component="span"
+            sx={{
+              display: 'block',
+              fontWeight: 900,
+              lineHeight: 1.05,
+              // Scales down a bit on narrower desktops
+              fontSize: 'clamp(24px, 4vw, 40px)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={bandName}
+          >
+            {bandName}
+          </Typography>
+        </Box>
         {open ? (
-          <CloseIcon sx={{ fontSize: 30 }} />
+          <CloseIcon sx={{ fontSize: 30, flex: '0 0 auto' }} />
         ) : (
-          <ExpandMoreIcon sx={{ fontSize: 30 }} />
+          <ExpandMoreIcon sx={{ fontSize: 30, flex: '0 0 auto' }} />
         )}
       </ButtonBase>
 
@@ -133,20 +164,14 @@ export default function BandTitleMenu({
           elevation: 3,
           sx: (t) => ({
             mt: 1.25,
-            minWidth: 320, // wider menu
+            minWidth: 320,
             borderRadius: 2,
             border: `1px solid ${alpha(t.palette.primary.main, 0.12)}`,
             boxShadow: `0 12px 32px ${alpha('#000', 0.22)}`,
             overflow: 'hidden',
           }),
         }}
-        MenuListProps={{
-          dense: false,
-          sx: {
-            py: 0.5,
-          },
-        }}
-        // anchors feel better with larger menus
+        MenuListProps={{ dense: false, sx: { py: 0.5 } }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
@@ -186,15 +211,11 @@ export default function BandTitleMenu({
           href={`/bands/${bandId}/settings`}
           onClick={() => setAnchorEl(null)}
           sx={{
-            py: 1.25, // taller row
-            px: 1.75, // wider gutters
-            gap: 1, // space between icon & text
-            '& .MuiListItemIcon-root': {
-              minWidth: 44,
-            },
-            '& .MuiSvgIcon-root': {
-              fontSize: 22, // larger icon
-            },
+            py: 1.25,
+            px: 1.75,
+            gap: 1,
+            '& .MuiListItemIcon-root': { minWidth: 44 },
+            '& .MuiSvgIcon-root': { fontSize: 22 },
             '&:hover': (t) => ({
               backgroundColor: alpha(t.palette.primary.main, 0.06),
             }),

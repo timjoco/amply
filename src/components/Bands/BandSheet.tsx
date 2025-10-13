@@ -84,12 +84,8 @@ export default function BandSheet({ bandId }: Props) {
     severity: 'success',
   });
 
-  /**
-   * Helper: (re)load members + pending invites for this band
-   */
   const fetchRoster = useCallback(async () => {
     try {
-      // Try view first (includes email)
       let roster: any[] | null = null;
       {
         const { data, error } = await sb
@@ -376,29 +372,40 @@ export default function BandSheet({ bandId }: Props) {
 
       {/* Header */}
       <Stack
-        direction={{ xs: 'row', sm: 'row' }}
+        direction="row"
         alignItems="center"
-        spacing={2}
         sx={{
-          mb: 2.5,
+          mb: 2, // a bit tighter
           bgcolor: 'background.paper',
           borderRadius: 2,
           px: 2,
-          py: 1.5,
+          py: 1.25,
           border: (t) => `1px solid ${alpha(t.palette.primary.main, 0.08)}`,
+          gap: 1.25, // closer to the title
         }}
       >
-        <BandTitleMenu
-          bandId={bandId}
-          bandName={bandName}
-          onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
-        />
-        <Box sx={{ flex: 1, alignItems: 'center' }} />
-        <RolePill
-          role={isAdmin ? 'admin' : 'member'}
-          size="small"
-          sx={{ alignSelf: 'center' }}
-        />
+        {/* Title takes the left; allow shrink + ellipsis on mobile */}
+        <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+          <BandTitleMenu
+            bandId={bandId}
+            bandName={bandName}
+            onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
+          />
+        </Box>
+
+        {/* Pill on the far right */}
+        <Box sx={{ flex: '0 0 auto', ml: 'auto' }}>
+          <RolePill
+            role={isAdmin ? 'admin' : 'member'}
+            size="small"
+            sx={{
+              mr: { xs: 0.75, sm: 0 }, // tiny edge padding on mobile
+              px: { xs: 1.25, sm: 1 },
+              height: 24,
+              '& .MuiChip-label': { px: { xs: 0.5, sm: 0.75 } },
+            }}
+          />
+        </Box>
       </Stack>
 
       {/* Tabs */}
@@ -460,7 +467,8 @@ export default function BandSheet({ bandId }: Props) {
                 {m.profile?.email ?? ''}
               </Typography>
               <Box sx={{ flex: 1 }} />
-              <RolePill role={m.role} size="small" />
+              {/* This will need to be changed to band role!! */}
+              {/* <RolePill role={m.role} size="small" /> */}
             </Stack>
           ))}
 

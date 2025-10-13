@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import AddBandTile from '@/components/AddBandTile';
 import BandCard from '@/components/Bands/BandCard';
+import EmptyStateStartBand from '@/components/Bands/EmptyStateStartBand';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import type { Band, MembershipRole } from '@/types/db';
 import AddIcon from '@mui/icons-material/Add';
@@ -55,6 +57,35 @@ export default function DashboardClient() {
   const [bandName, setBandName] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // styles
+
+  const cardSx = (t: any) => ({
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    borderRadius: 3,
+    border: '1px solid',
+    borderColor: alpha(t.palette.primary.main, 0.22),
+    background:
+      'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))',
+    backdropFilter: 'blur(6px)',
+    boxShadow: `0 0 0 1px ${alpha(
+      t.palette.primary.main,
+      0.12
+    )}, 0 10px 30px rgba(0,0,0,.35)`,
+  });
+
+  const gridSx = {
+    display: 'grid',
+    gap: 2.5,
+    gridTemplateColumns: {
+      xs: '1fr',
+      sm: 'repeat(2, minmax(0, 1fr))',
+      md: 'repeat(3, minmax(0, 1fr))',
+      xl: 'repeat(4, minmax(0, 1fr))',
+    },
+  } as const;
+
   // Load greeting + bands (no redirects here — server already gated access)
   useEffect(() => {
     const sb = supabaseBrowser();
@@ -75,61 +106,69 @@ export default function DashboardClient() {
           return;
         }
 
-        const { error } = await sb.rpc('ensure_profile');
-        if (error) console.warn('ensure_profile error:', error.message);
-
-        // ---- NEW: ensure a profile row exists (idempotent)
+        // Ensure a profile row exists (idempotent). If RPC missing, just warn.
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
-          // If the RPC doesn't exist yet (e.g. 42883), just warn and continue
-          if (rpcErr) {
-            if (rpcErr.code === '42883') {
-              console.warn(
-                '[ensure_profile] RPC not found. Create it in SQL, or ignore this if profiles are created via trigger.'
-              );
-            } else {
-              console.warn('[ensure_profile] RPC error:', rpcErr.message);
-            }
+          if (rpcErr && rpcErr.code !== '42883') {
+            console.warn('[ensure_profile] RPC error:', rpcErr.message);
+          } else if (rpcErr?.code === '42883') {
+            console.warn(
+              '[ensure_profile] RPC not found — safe to ignore if triggers handle it.'
+            );
           }
         } catch (e) {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
-        // greeting name (tolerate missing profile fields)
+        // Greeting name
         const { data: profile, error: pErr } = await sb
           .from('profiles')
           .select('first_name, email')
           .eq('id', user.id)
           .maybeSingle();
-
-        if (pErr) {
-          console.warn('profiles select error:', pErr.message);
-        }
-
+        if (pErr) console.warn('profiles select error:', pErr.message);
         setGreetingName(profile?.first_name || profile?.email || 'there');
 
-        // load bands via memberships
+        // Load bands via memberships
         const { data: rows, error: mErr } = await sb
           .from('band_members')
           .select('role, bands(id, name)')
           .eq('user_id', user.id);
-
         if (mErr) throw mErr;
 
-        const list: BandWithRole[] = (rows ?? [])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((r: any) =>
-            r?.bands
-              ? {
-                  id: r.bands.id as string,
-                  name: r.bands.name as string,
-                  role: r.role as MembershipRole,
-                }
-              : null
-          )
-          .filter((b): b is BandWithRole => b !== null);
+        console.table(rows); // 👀 see exactly what admins vs members get
 
-        setBands(list);
+        const norm = (r: any) =>
+          r?.bands && {
+            id: String(r.bands.id),
+            name: String(r.bands.name ?? '').trim(),
+            role: String(r.role ?? '')
+              .toLowerCase()
+              .trim() as MembershipRole,
+          };
+
+        const list: BandWithRole[] = (rows ?? []).map(norm).filter(Boolean);
+        // Optional: warn on weird roles
+        list.forEach((b) => {
+          if (!['admin', 'editor', 'member'].includes(b.role)) {
+            console.warn('[weird role]', b);
+          }
+        });
+
+        // // const list: BandWithRole[] = (rows ?? [])
+        //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        //   .map((r: any) =>
+        //     r?.bands
+        //       ? {
+        //           id: r.bands.id as string,
+        //           name: r.bands.name as string,
+        //           role: r.role as MembershipRole,
+        //         }
+        //       : null
+        //   )
+        //   .filter((b): b is BandWithRole => b !== null);
+
+        if (mounted) setBands(list);
       } catch (e) {
         if (!mounted) return;
         console.error(e);
@@ -163,7 +202,7 @@ export default function DashboardClient() {
     if (error) throw error;
 
     const list: BandWithRole[] = (rows ?? [])
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       .map((r: any) =>
         r?.bands
           ? {
@@ -200,35 +239,6 @@ export default function DashboardClient() {
       setCreating(false);
     }
   }, [bandName, refreshBands]);
-
-  // styles
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cardSx = (t: any) => ({
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    borderRadius: 3,
-    border: '1px solid',
-    borderColor: alpha(t.palette.primary.main, 0.22),
-    background:
-      'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))',
-    backdropFilter: 'blur(6px)',
-    boxShadow: `0 0 0 1px ${alpha(
-      t.palette.primary.main,
-      0.12
-    )}, 0 10px 30px rgba(0,0,0,.35)`,
-  });
-
-  const gridSx = {
-    display: 'grid',
-    gap: 2.5,
-    gridTemplateColumns: {
-      xs: '1fr',
-      sm: 'repeat(2, minmax(0, 1fr))',
-      md: 'repeat(3, minmax(0, 1fr))',
-      xl: 'repeat(4, minmax(0, 1fr))',
-    },
-  } as const;
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
@@ -287,9 +297,7 @@ export default function DashboardClient() {
           ))}
         </Box>
       ) : bands.length === 0 ? (
-        <Box sx={gridSx}>
-          <AddBandTile onClick={() => setCreateOpen(true)} />
-        </Box>
+        <EmptyStateStartBand onCreate={() => setCreateOpen(true)} />
       ) : (
         <Box sx={gridSx}>
           {isMdUp && <AddBandTile onClick={() => setCreateOpen(true)} />}
@@ -299,7 +307,8 @@ export default function DashboardClient() {
         </Box>
       )}
 
-      {!isMdUp && (
+      {/* This piece changes the add band button to a Fab on small screens*/}
+      {!isMdUp && bands.length > 0 && !loading && (
         <Fab
           color="primary"
           aria-label="Create band"
