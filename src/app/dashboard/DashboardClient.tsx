@@ -1,11 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import AddBandTile from '@/components/AddBandTile';
 import BandCard from '@/components/Bands/BandCard';
 import EmptyStateStartBand from '@/components/Bands/EmptyStateStartBand';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import type { Band, MembershipRole } from '@/types/db';
+import {
+  mapMembershipRowsToBands,
+  sortBandsByRolePriority,
+  type BandWithRole,
+} from '@/utils/bands';
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -20,18 +23,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Fab,
   Skeleton,
   Stack,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-
-type BandWithRole = Band & { role: MembershipRole };
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -45,19 +43,19 @@ function getErrorMessage(e: unknown): string {
 
 export default function DashboardClient() {
   const router = useRouter();
-  const theme = useTheme();
-  const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
+  // const theme = useTheme();
+  // const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [greetingName, setGreetingName] = useState('there');
+  // optional greeting
+  const [, setGreetingName] = useState('there');
+
   const [bands, setBands] = useState<BandWithRole[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [bandName, setBandName] = useState('');
   const [creating, setCreating] = useState(false);
-
-  // styles
 
   const cardSx = (t: any) => ({
     height: '100%',
@@ -86,7 +84,7 @@ export default function DashboardClient() {
     },
   } as const;
 
-  // Load greeting + bands (no redirects here — server already gated access)
+  // Load profile + bands
   useEffect(() => {
     const sb = supabaseBrowser();
     let mounted = true;
@@ -96,79 +94,48 @@ export default function DashboardClient() {
         setLoading(true);
         setError(null);
 
-        // ensure session exists; if not, bounce to login (with next)
         const {
           data: { user },
         } = await sb.auth.getUser();
         if (!mounted) return;
+
         if (!user) {
           router.replace('/login?next=/dashboard');
           return;
         }
 
-        // Ensure a profile row exists (idempotent). If RPC missing, just warn.
+        // Ensure a profile row exists (idempotent)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
           if (rpcErr && rpcErr.code !== '42883') {
             console.warn('[ensure_profile] RPC error:', rpcErr.message);
-          } else if (rpcErr?.code === '42883') {
-            console.warn(
-              '[ensure_profile] RPC not found — safe to ignore if triggers handle it.'
-            );
           }
         } catch (e) {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
-        // Greeting name
+        // Greeting
         const { data: profile, error: pErr } = await sb
           .from('profiles')
           .select('first_name, email')
           .eq('id', user.id)
           .maybeSingle();
         if (pErr) console.warn('profiles select error:', pErr.message);
-        setGreetingName(profile?.first_name || profile?.email || 'there');
+        if (mounted) {
+          setGreetingName(profile?.first_name || profile?.email || 'there');
+        }
 
-        // Load bands via memberships
+        // Bands via memberships
         const { data: rows, error: mErr } = await sb
           .from('band_members')
           .select('role, bands(id, name)')
           .eq('user_id', user.id);
         if (mErr) throw mErr;
 
-        console.table(rows); // 👀 see exactly what admins vs members get
-
-        const norm = (r: any) =>
-          r?.bands && {
-            id: String(r.bands.id),
-            name: String(r.bands.name ?? '').trim(),
-            role: String(r.role ?? '')
-              .toLowerCase()
-              .trim() as MembershipRole,
-          };
-
-        const list: BandWithRole[] = (rows ?? []).map(norm).filter(Boolean);
-        // Optional: warn on weird roles
-        list.forEach((b) => {
-          if (!['admin', 'editor', 'member'].includes(b.role)) {
-            console.warn('[weird role]', b);
-          }
-        });
-
-        // // const list: BandWithRole[] = (rows ?? [])
-        //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        //   .map((r: any) =>
-        //     r?.bands
-        //       ? {
-        //           id: r.bands.id as string,
-        //           name: r.bands.name as string,
-        //           role: r.role as MembershipRole,
-        //         }
-        //       : null
-        //   )
-        //   .filter((b): b is BandWithRole => b !== null);
-
-        if (mounted) setBands(list);
+        if (mounted) {
+          const list = sortBandsByRolePriority(mapMembershipRowsToBands(rows));
+          setBands(list);
+        }
       } catch (e) {
         if (!mounted) return;
         console.error(e);
@@ -201,20 +168,7 @@ export default function DashboardClient() {
       .eq('user_id', user.id);
     if (error) throw error;
 
-    const list: BandWithRole[] = (rows ?? [])
-
-      .map((r: any) =>
-        r?.bands
-          ? {
-              id: r.bands.id as string,
-              name: r.bands.name as string,
-              role: r.role as MembershipRole,
-            }
-          : null
-      )
-      .filter((b): b is BandWithRole => b !== null);
-
-    setBands(list);
+    setBands(sortBandsByRolePriority(mapMembershipRowsToBands(rows)));
   }, []);
 
   const createBand = useCallback(async () => {
@@ -224,7 +178,6 @@ export default function DashboardClient() {
       setError(null);
 
       const sb = supabaseBrowser();
-
       const { error } = await sb.rpc('create_band', {
         p_name: bandName.trim(),
       });
@@ -244,7 +197,8 @@ export default function DashboardClient() {
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
       <Stack spacing={1.5} sx={{ mb: 3 }}>
         <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
-          Welcome, {greetingName}
+          {/* {greetingName} Dashboard */}
+          Your Dashboard
         </Typography>
         {error && (
           <Alert
@@ -300,15 +254,14 @@ export default function DashboardClient() {
         <EmptyStateStartBand onCreate={() => setCreateOpen(true)} />
       ) : (
         <Box sx={gridSx}>
-          {isMdUp && <AddBandTile onClick={() => setCreateOpen(true)} />}
           {bands.map((b) => (
             <BandCard key={b.id} id={b.id} name={b.name} bandRole={b.role} />
           ))}
         </Box>
       )}
 
-      {/* This piece changes the add band button to a Fab on small screens*/}
-      {!isMdUp && bands.length > 0 && !loading && (
+      {/* Mobile FAB for creating a band */}
+      {/* {!isMdUp && bands.length > 0 && !loading && (
         <Fab
           color="primary"
           aria-label="Create band"
@@ -322,7 +275,7 @@ export default function DashboardClient() {
         >
           <AddIcon />
         </Fab>
-      )}
+      )} */}
 
       {/* Create band dialog */}
       <Dialog
