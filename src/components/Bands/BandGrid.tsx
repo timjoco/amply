@@ -4,11 +4,14 @@
 import BandCard from '@/components/Bands/BandCard';
 import EmptyStateStartBand from '@/components/Bands/EmptyStateStartBand';
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import theme from '@/theme';
 import {
   mapMembershipRowsToBands,
   sortBandsByRolePriority,
   type BandWithRole,
+  type RawMembershipRow,
 } from '@/utils/bands';
+import { getErrorMessage } from '@/utils/errors';
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -29,63 +32,63 @@ import {
   TextField,
   Typography,
   useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-function getErrorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === 'string') return e;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return 'Unknown error';
-  }
-}
+type Props = {
+  /** Optional heading to show (defaults to "Your Dashboard") */
+  title?: string;
+  /** Optional initial items (e.g., server-fetched) */
+  initialItems?: BandWithRole[];
+};
 
-export default function DashboardClient() {
+const gridSx = {
+  display: 'grid',
+  gap: 2.5,
+  gridTemplateColumns: {
+    xs: '1fr',
+    sm: 'repeat(2, minmax(0, 1fr))',
+    md: 'repeat(3, minmax(0, 1fr))',
+    xl: 'repeat(4, minmax(0, 1fr))',
+  },
+} as const;
+
+const cardSx = (t: any) => ({
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  borderRadius: 3,
+  border: '1px solid',
+  borderColor: alpha(t.palette.primary.main, 0.22),
+  background:
+    'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))',
+  backdropFilter: 'blur(6px)',
+  boxShadow: `0 0 0 1px ${alpha(
+    t.palette.primary.main,
+    0.12
+  )}, 0 10px 30px rgba(0,0,0,.35)`,
+});
+
+export default function BandsGridClient({
+  title = 'Your Dashboard',
+  initialItems = [],
+}: Props) {
   const router = useRouter();
-  const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [bands, setBands] = useState<BandWithRole[]>([]);
+  // unified bands state (used by the return block you provided)
+  const [bands, setBands] = useState<BandWithRole[]>(initialItems);
 
+  // create-band dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [bandName, setBandName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const cardSx = (t: any) => ({
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    borderRadius: 3,
-    border: '1px solid',
-    borderColor: alpha(t.palette.primary.main, 0.22),
-    background:
-      'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))',
-    backdropFilter: 'blur(6px)',
-    boxShadow: `0 0 0 1px ${alpha(
-      t.palette.primary.main,
-      0.12
-    )}, 0 10px 30px rgba(0,0,0,.35)`,
-  });
-
-  const gridSx = {
-    display: 'grid',
-    gap: 2.5,
-    gridTemplateColumns: {
-      xs: '1fr',
-      sm: 'repeat(2, minmax(0, 1fr))',
-      md: 'repeat(3, minmax(0, 1fr))',
-      xl: 'repeat(4, minmax(0, 1fr))',
-    },
-  } as const;
-
-  // Load profile + bands
+  // FETCH
   useEffect(() => {
     const sb = supabaseBrowser();
     let mounted = true;
@@ -95,9 +98,12 @@ export default function DashboardClient() {
         setLoading(true);
         setError(null);
 
+        // auth guard
         const {
           data: { user },
+          error: userErr,
         } = await sb.auth.getUser();
+        if (userErr) throw userErr;
         if (!mounted) return;
 
         if (!user) {
@@ -105,7 +111,7 @@ export default function DashboardClient() {
           return;
         }
 
-        // Ensure a profile row exists (idempotent)
+        // ensure profile (optional)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
           if (rpcErr && rpcErr.code !== '42883') {
@@ -115,46 +121,43 @@ export default function DashboardClient() {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
-        // Greeting
-        // const { data: profile, error: pErr } = await sb
-        //   .from('profiles')
-        //   .select('first_name, email')
-        //   .eq('id', user.id)
-        //   .maybeSingle();
-        // if (pErr) console.warn('profiles select error:', pErr.message);
-        // if (mounted) {
-        //   setGreetingName(profile?.first_name || profile?.email || 'there');
-        // }
-
-        // Bands via memberships
+        // memberships → bands
         const { data: rows, error: mErr } = await sb
           .from('band_members')
+          // If you know your FK name, prefer:
+          // .select('role, bands:bands!band_members_band_id_fkey(id, name)')
           .select('role, bands(id, name)')
           .eq('user_id', user.id);
-        if (mErr) throw mErr;
 
-        if (mounted) {
-          const list = sortBandsByRolePriority(mapMembershipRowsToBands(rows));
-          setBands(list);
-        }
+        if (mErr) throw mErr;
+        if (!mounted) return;
+
+        const list = sortBandsByRolePriority(
+          mapMembershipRowsToBands(rows as unknown as RawMembershipRow[])
+        );
+
+        // prefer fresh fetch; fallback to initialItems if empty
+        setBands(list.length ? list : initialItems);
       } catch (e) {
         if (!mounted) return;
         console.error(e);
-        setError(getErrorMessage(e) || 'Failed to load dashboard');
+        setError(getErrorMessage(e) || 'Failed to load bands');
       } finally {
         if (mounted) setLoading(false);
       }
     })();
 
-    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => {
-      if (!s?.user) router.replace('/login?next=/dashboard');
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) router.replace('/login?next=/dashboard');
     });
 
     return () => {
       mounted = false;
-      sub?.subscription?.unsubscribe?.();
+      subscription?.unsubscribe?.();
     };
-  }, [router]);
+  }, [router, initialItems]);
 
   const refreshBands = useCallback(async () => {
     const sb = supabaseBrowser();
@@ -169,7 +172,11 @@ export default function DashboardClient() {
       .eq('user_id', user.id);
     if (error) throw error;
 
-    setBands(sortBandsByRolePriority(mapMembershipRowsToBands(rows)));
+    setBands(
+      sortBandsByRolePriority(
+        mapMembershipRowsToBands(rows as unknown as RawMembershipRow[])
+      )
+    );
   }, []);
 
   const createBand = useCallback(async () => {
@@ -194,11 +201,12 @@ export default function DashboardClient() {
     }
   }, [bandName, refreshBands]);
 
+  // ——— RETURN (exact structure you provided, with `title` prop injected) ———
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
       <Stack spacing={1.5} sx={{ mb: 3 }}>
         <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
-          Your Dashboard
+          {title}
         </Typography>
         {error && (
           <Alert
@@ -217,7 +225,7 @@ export default function DashboardClient() {
 
       {loading ? (
         <Box sx={gridSx}>
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} sx={cardSx}>
               <CardContent>
                 <Skeleton variant="text" width="60%" height={30} />

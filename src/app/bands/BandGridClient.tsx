@@ -1,14 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
 'use client';
 
 import BandCard from '@/components/Bands/BandCard';
 import EmptyStateStartBand from '@/components/Bands/EmptyStateStartBand';
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import theme from '@/theme';
 import {
   mapMembershipRowsToBands,
   sortBandsByRolePriority,
   type BandWithRole,
 } from '@/utils/bands';
+import { getErrorMessage } from '@/utils/errors';
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -29,24 +32,13 @@ import {
   TextField,
   Typography,
   useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-function getErrorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === 'string') return e;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return 'Unknown error';
-  }
-}
-
-export default function DashboardClient() {
+// If you want to seed via props, pass BandWithRole[] (same as Dashboard)
+export default function BandsGridClient({}) {
   const router = useRouter();
-  const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
 
   const [loading, setLoading] = useState(true);
@@ -85,7 +77,6 @@ export default function DashboardClient() {
     },
   } as const;
 
-  // Load profile + bands
   useEffect(() => {
     const sb = supabaseBrowser();
     let mounted = true;
@@ -95,9 +86,12 @@ export default function DashboardClient() {
         setLoading(true);
         setError(null);
 
+        // Ensure session
         const {
           data: { user },
+          error: userErr,
         } = await sb.auth.getUser();
+        if (userErr) throw userErr;
         if (!mounted) return;
 
         if (!user) {
@@ -115,18 +109,8 @@ export default function DashboardClient() {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
-        // Greeting
-        // const { data: profile, error: pErr } = await sb
-        //   .from('profiles')
-        //   .select('first_name, email')
-        //   .eq('id', user.id)
-        //   .maybeSingle();
-        // if (pErr) console.warn('profiles select error:', pErr.message);
-        // if (mounted) {
-        //   setGreetingName(profile?.first_name || profile?.email || 'there');
-        // }
-
-        // Bands via memberships
+        // Load bands via memberships
+        // Prefer using your FK name to force object join. If unsure, the mapper handles arrays too.
         const { data: rows, error: mErr } = await sb
           .from('band_members')
           .select('role, bands(id, name)')
@@ -198,7 +182,7 @@ export default function DashboardClient() {
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
       <Stack spacing={1.5} sx={{ mb: 3 }}>
         <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
-          Your Dashboard
+          Your Bands
         </Typography>
         {error && (
           <Alert
