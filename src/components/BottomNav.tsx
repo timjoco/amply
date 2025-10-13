@@ -144,7 +144,6 @@ export default function BottomNav() {
             },
           },
 
-          // optional: dim unselected a bit more in dark mode
           ...(t.palette.mode === 'dark' && {
             '& .MuiBottomNavigationAction-root:not(.Mui-selected)': {
               color: alpha(t.palette.common.white, 0.75),
@@ -166,7 +165,7 @@ export default function BottomNav() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 '& .MuiAvatar-root': {
-                  color: 'currentColor', // initials follow selected (white) vs grey
+                  color: 'currentColor',
                   border: `2px solid ${alpha(t.palette.text.primary, 0.4)}`,
                 },
                 '.Mui-selected & .MuiAvatar-root': {

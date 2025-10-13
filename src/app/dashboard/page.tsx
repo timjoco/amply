@@ -8,7 +8,6 @@ export const revalidate = 0;
 export default async function Page() {
   const sb = await supabaseServer();
 
-  // Require auth
   const {
     data: { user },
   } = await sb.auth.getUser();
@@ -16,7 +15,6 @@ export default async function Page() {
     redirect('/login?next=/dashboard');
   }
 
-  // Gate by onboarding (server-side to avoid loops)
   const { data: profile, error } = await sb
     .from('profiles')
     .select('onboarded')
@@ -28,6 +26,5 @@ export default async function Page() {
     redirect(`/onboarding?next=${encodeURIComponent('/dashboard')}`);
   }
 
-  // All good — render the client
   return <DashboardClient />;
 }
