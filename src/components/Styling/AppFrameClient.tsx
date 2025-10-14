@@ -1,8 +1,8 @@
 'use client';
 
-import BottomNav from '@/components/BottomNav';
-import HeaderPublic from '@/components/HeaderPublic';
-import SideNav, { SIDE_NAV_WIDTH } from '@/components/SideNav';
+import BottomNav from '@/components/Nav/BottomNav';
+import HeaderPublic from '@/components/Nav/HeaderPublic';
+import SideNav, { SIDE_NAV_WIDTH } from '@/components/Nav/SideNav';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import { Box } from '@mui/material';
 import { useEffect, useState } from 'react';
