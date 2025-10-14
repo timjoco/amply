@@ -3,6 +3,7 @@
 
 'use client';
 
+import { useCreateBand } from '@/hooks/useCreateBand';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import theme from '@/theme';
 
@@ -13,6 +14,7 @@ import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import {
   Alert,
   Autocomplete,
+  Avatar,
   Button,
   CircularProgress,
   Dialog,
@@ -37,13 +39,17 @@ const blurActive = () =>
   (document.activeElement as HTMLElement | null)?.blur?.();
 
 type Trigger = 'icon' | 'button' | 'none';
-type BandLite = { id: string; name: string };
+type BandLite = { id: string; name: string; avatar_url?: string | null };
 
 export type GlobalCreateProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   trigger?: Trigger;
-  onBandCreated?: (band: { id: string; name: string }) => void;
+  onBandCreated?: (band: {
+    id: string;
+    name: string;
+    avatar_url?: string | null;
+  }) => void;
 };
 
 function errMsg(e: unknown) {
@@ -101,11 +107,22 @@ export default function GlobalCreate({
 
   // New band form
   const [bandName, setBandName] = useState('');
-  const [creatingBand, setCreatingBand] = useState(false);
+
+  // Optional avatar during creation
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const CONTENT_PX = 3;
 
-  // Load bands when dialog opens (ensure profile → fetch bands → merge)
+  // Hook: create band via service (trigger handles admin membership)
+  const {
+    createBand,
+    loading: creatingBand,
+    error: createBandError,
+    resetError,
+  } = useCreateBand();
+
+  // Load bands when dialog opens
   useEffect(() => {
     if (!open) return;
     let mounted = true;
@@ -139,13 +156,18 @@ export default function GlobalCreate({
 
         const { data: rows, error: mErr } = await sb
           .from('band_members')
-          .select('role, bands(id, name)')
+          .select('role, bands(id, name, avatar_url)')
           .eq('user_id', user.id);
         if (mErr) throw mErr;
 
         const mapped: BandLite[] = (rows ?? [])
           .map((r: any) => r?.bands)
-          .filter(Boolean) as BandLite[];
+          .filter(Boolean)
+          .map((b: any) => ({
+            id: String(b.id),
+            name: String(b.name),
+            avatar_url: b.avatar_url ?? null,
+          }));
 
         if (mounted) setBands((prev) => mergeLocalBands(prev, mapped));
       } catch (e) {
@@ -188,75 +210,88 @@ export default function GlobalCreate({
 
     const { data: rows, error } = await sb
       .from('band_members')
-      .select('role, bands(id, name)')
+      .select('role, bands(id, name, avatar_url)')
       .eq('user_id', user.id);
     if (error) throw error;
 
     const mapped: BandLite[] = (rows ?? [])
       .map((r: any) => r?.bands)
-      .filter(Boolean) as BandLite[];
+      .filter(Boolean)
+      .map((b: any) => ({
+        id: String(b.id),
+        name: String(b.name),
+        avatar_url: b.avatar_url ?? null,
+      }));
 
     setBands((prev) => mergeLocalBands(prev, mapped));
   }, []);
 
-  // Create Band via RPC (returns the created row)
-  const createBand = useCallback(async () => {
+  // File pick handler
+  function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] || null;
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return alert('Please choose an image.');
+    if (f.size > 3 * 1024 * 1024) return alert('Max size is 3MB.');
+    setAvatarFile(f);
+    setAvatarPreview(URL.createObjectURL(f));
+  }
+
+  // Submit handler using the hook (NO manual band_members insert)
+  const onSubmitCreate = useCallback(async () => {
     const name = bandName.trim();
     if (!name) return;
 
     try {
-      setCreatingBand(true);
+      resetError?.();
       setError(null);
 
-      const sb = supabaseBrowser();
-
-      // Create via RPC — must return { id, name } (or [{ id, name }])
-      const { data: rpcData, error: rpcErr } = await sb.rpc('create_band', {
-        p_name: name,
-      });
-      if (rpcErr) throw rpcErr;
-
-      let newBand: { id: string; name: string } | null = null;
-      if (Array.isArray(rpcData)) {
-        const row = rpcData[0];
-        if (row?.id && row?.name)
-          newBand = { id: String(row.id), name: String(row.name) };
-      } else if (rpcData && (rpcData as any).id && (rpcData as any).name) {
-        newBand = {
-          id: String((rpcData as any).id),
-          name: String((rpcData as any).name),
-        };
+      const created = await createBand({ name, avatarFile }); // trigger makes creator admin
+      if (!created) {
+        setError(createBandError ?? 'Could not create band');
+        return;
       }
 
-      if (!newBand)
-        throw new Error('create_band did not return a band row (id, name).');
+      // Notify parent & local state update
+      onBandCreated?.(created);
 
-      // Notify parent immediately + broadcast (for any other listeners)
-      onBandCreated?.(newBand);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('bands:created', { detail: newBand })
+          new CustomEvent('bands:created', { detail: created })
         );
       }
 
-      // Optimistically show in the modal’s local list
-      setBands((prev) => mergeLocalBands(prev, [newBand]));
+      setBands((prev) =>
+        mergeLocalBands(prev, [
+          {
+            id: created.id,
+            name: created.name,
+            avatar_url: created.avatar_url ?? null,
+          },
+        ])
+      );
 
-      // Refresh local list from server (merge to avoid clobber)
       await refreshBandsLocal();
 
       // Reset UI
-      setEventBand(newBand);
       setBandName('');
+      setAvatarFile(null);
+      setAvatarPreview(null);
       setStep('menu');
       setOpen(false);
     } catch (e) {
-      console.error('[createBand]', e);
+      console.error('[GlobalCreate:onSubmitCreate]', e);
       setError(errMsg(e) || 'Could not create band');
-    } finally {
-      setCreatingBand(false);
     }
-  }, [bandName, onBandCreated, refreshBandsLocal, setOpen]);
+  }, [
+    bandName,
+    avatarFile,
+    createBand,
+    createBandError,
+    onBandCreated,
+    refreshBandsLocal,
+    resetError,
+    setOpen,
+  ]);
 
   // Optional trigger button (icon/button/none)
   const TriggerEl = useMemo(() => {
@@ -325,9 +360,9 @@ export default function GlobalCreate({
         </DialogTitle>
 
         <DialogContent sx={{ px: CONTENT_PX, pt: 1, pb: 2 }}>
-          {error && (
+          {(error || createBandError) && (
             <Alert severity="error" sx={{ mb: 1 }}>
-              {error}
+              {error || createBandError}
             </Alert>
           )}
 
@@ -400,7 +435,7 @@ export default function GlobalCreate({
             </Stack>
           ) : (
             // step === 'newBand'
-            <Stack gap={1.25}>
+            <Stack gap={1.5}>
               <TextField
                 autoFocus
                 fullWidth
@@ -409,16 +444,43 @@ export default function GlobalCreate({
                 value={bandName}
                 onChange={(e) => setBandName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') createBand();
+                  if (e.key === 'Enter') onSubmitCreate();
                 }}
               />
+
+              {/* Optional avatar picker */}
+              <Stack direction="row" alignItems="center" gap={2}>
+                <Avatar
+                  src={avatarPreview || undefined}
+                  sx={{ width: 64, height: 64, fontWeight: 800 }}
+                >
+                  {bandName.trim().slice(0, 2).toUpperCase()}
+                </Avatar>
+
+                <Button variant="outlined" component="label">
+                  {avatarPreview ? 'Change avatar' : 'Add avatar'}
+                  <input
+                    hidden
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      onPickAvatar(e);
+                      (e.currentTarget as HTMLInputElement).value = '';
+                    }}
+                  />
+                </Button>
+              </Stack>
 
               <Stack direction="row" gap={1}>
                 <Button
                   variant="outlined"
                   onClick={() => {
                     setError(null);
+                    resetError();
                     setBandName('');
+                    setAvatarFile(null);
+                    setAvatarPreview(null);
                     setStep('menu');
                   }}
                 >
@@ -427,7 +489,7 @@ export default function GlobalCreate({
 
                 <Button
                   variant="contained"
-                  onClick={createBand}
+                  onClick={onSubmitCreate}
                   disabled={!bandName.trim() || creatingBand}
                   startIcon={
                     creatingBand ? <CircularProgress size={18} /> : undefined

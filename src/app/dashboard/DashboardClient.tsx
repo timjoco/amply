@@ -7,6 +7,7 @@ import GlobalCreate from '@/components/GlobalCreate';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import {
   mapMembershipRowsToBands,
+  normalizeRole,
   sortBandsByRolePriority,
   type BandWithRole,
 } from '@/utils/bands';
@@ -60,12 +61,19 @@ export default function DashboardClient() {
 
   const pageGutterSx = { mx: { xs: 1.5, sm: 2.5, md: 4 } } as const;
 
-  // Parent callback from GlobalCreate — optimistic prepend.
-  const handleBandCreated = (band: { id: string; name: string }) => {
+  // Parent callback from GlobalCreate — optimistic prepend (no uploading here).
+  const handleBandCreated = (band: {
+    id: string;
+    name: string;
+    avatar_url?: string | null; // may be provided by GlobalCreate
+    role?: 'admin' | 'member'; // default admin for creator
+  }) => {
+    const role = band.role ?? 'admin';
+    const avatar_url = band.avatar_url ?? null;
     setBands((prev) =>
       prev.some((b) => b.id === band.id)
         ? prev
-        : [{ id: band.id, name: band.name, role: 'admin' }, ...prev]
+        : [{ id: band.id, name: band.name, role, avatar_url }, ...prev]
     );
   };
 
@@ -121,6 +129,7 @@ export default function DashboardClient() {
           return;
         }
 
+        // Best-effort profile ensure
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
           if (rpcErr && rpcErr.code !== '42883')
@@ -129,9 +138,10 @@ export default function DashboardClient() {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
+        // ⬇️ Include avatar_url for display-only
         const { data: rows, error: mErr } = await sb
           .from('band_members')
-          .select('role, bands(id, name)')
+          .select('role, bands(id, name, avatar_url)')
           .eq('user_id', user.id);
         if (mErr) throw mErr;
 
@@ -183,17 +193,28 @@ export default function DashboardClient() {
             const bandId = (payload.new as any)?.band_id;
             if (!bandId) return;
 
+            // ⬇️ get avatar_url for display
             const { data: band } = await sb
               .from('bands')
-              .select('id, name')
+              .select('id, name, avatar_url')
               .eq('id', bandId)
               .single();
             if (!band) return;
-
             setBands((prev) => {
               if (prev.some((b) => b.id === band.id)) return prev;
-              const role = (payload.new as any)?.role || 'member';
-              return [{ id: band.id, name: band.name, role }, ...prev];
+
+              const rawRole = (payload.new as any)?.role;
+              const role = normalizeRole(rawRole);
+
+              return [
+                {
+                  id: band.id,
+                  name: band.name,
+                  role,
+                  avatar_url: band.avatar_url ?? null,
+                },
+                ...prev,
+              ];
             });
           }
         )
@@ -212,7 +233,7 @@ export default function DashboardClient() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         trigger="none"
-        onBandCreated={handleBandCreated}
+        onBandCreated={handleBandCreated} // may include avatar_url from dialog
       />
 
       <Stack spacing={1.5} sx={{ mb: 3 }}>
@@ -295,13 +316,7 @@ export default function DashboardClient() {
               <BandGrid
                 tileSize={180}
                 selectedId={currentBandId}
-                bands={bands.map((b) => ({
-                  id: b.id,
-                  name: b.name,
-                  role: (b.role?.toLowerCase() === 'admin'
-                    ? 'admin'
-                    : 'member') as 'admin' | 'member',
-                }))}
+                bands={bands}
               />
             </Box>
           )}
