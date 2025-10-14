@@ -116,15 +116,13 @@ export default function LoginPage() {
       setStatus('verifying');
       try {
         const supabase = supabaseBrowser();
-        // One-tab OTP verification (no redirect needed)
         const { error } = await supabase.auth.verifyOtp({
           email: email.trim(),
           token: code.trim(),
-          type: 'email', // verify the 6-digit email OTP
+          type: 'email',
         });
         if (error) throw error;
 
-        // Optionally pass invite/next along if present
         const params =
           typeof window !== 'undefined'
             ? new URLSearchParams(window.location.search)
