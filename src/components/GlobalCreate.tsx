@@ -10,7 +10,6 @@ import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import EventIcon from '@mui/icons-material/Event';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
-
 import {
   Alert,
   Autocomplete,
@@ -25,7 +24,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Snackbar,
   Stack,
   TextField,
   Tooltip,
@@ -33,21 +31,20 @@ import {
 } from '@mui/material';
 
 import { useRouter } from 'next/navigation';
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const blurActive = () =>
   (document.activeElement as HTMLElement | null)?.blur?.();
 
-export type GlobalCreateHandle = { open: () => void; close: () => void };
 type Trigger = 'icon' | 'button' | 'none';
-type Props = { trigger?: Trigger };
 type BandLite = { id: string; name: string };
+
+export type GlobalCreateProps = {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  trigger?: Trigger;
+  onBandCreated?: (band: { id: string; name: string }) => void;
+};
 
 function errMsg(e: unknown) {
   if (typeof e === 'string') return e;
@@ -56,21 +53,45 @@ function errMsg(e: unknown) {
   return 'Something went wrong';
 }
 
-export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
-  { trigger = 'icon' }: Props,
-  ref
-) {
+/** Merge server results into current list (keeps optimistic items; stable by name). */
+function mergeLocalBands(
+  current: BandLite[],
+  incoming: BandLite[]
+): BandLite[] {
+  const map = new Map<string, BandLite>();
+  current.forEach((b) => map.set(b.id, b));
+  incoming.forEach((b) => {
+    const prev = map.get(b.id);
+    map.set(b.id, prev ? { ...prev, ...b } : b);
+  });
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export default function GlobalCreate({
+  open: openProp,
+  onOpenChange,
+  trigger = 'icon',
+  onBandCreated,
+}: GlobalCreateProps) {
   const router = useRouter();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [open, setOpen] = useState(false);
+  // Controlled/uncontrolled open handling
+  const isControlled = typeof openProp === 'boolean';
+  const [openUncontrolled, setOpenUncontrolled] = useState(false);
+  const open = isControlled ? (openProp as boolean) : openUncontrolled;
+  const setOpen = useCallback(
+    (v: boolean) => {
+      if (isControlled) onOpenChange?.(v);
+      else setOpenUncontrolled(v);
+    },
+    [isControlled, onOpenChange]
+  );
+
   const [step, setStep] = useState<'menu' | 'newBand'>('menu');
-
   const [error, setError] = useState<string | null>(null);
-  const [snack, setSnack] = useState<string | null>(null);
-  const toast = (msg: string) => setSnack(msg);
 
-  // Bands for "New Event"
+  // Bands for “New Event”
   const [bands, setBands] = useState<BandLite[]>([]);
   const [loadingBands, setLoadingBands] = useState(false);
   const hasBands = bands.length > 0;
@@ -82,23 +103,9 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
   const [bandName, setBandName] = useState('');
   const [creatingBand, setCreatingBand] = useState(false);
 
-  const CONTENT_PX = 3; // unified horizontal padding
+  const CONTENT_PX = 3;
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: () => {
-        blurActive();
-        setStep('menu');
-        setError(null);
-        setOpen(true);
-      },
-      close: () => setOpen(false),
-    }),
-    []
-  );
-
-  // Load on open: auth → ensure_profile → bands via memberships
+  // Load bands when dialog opens (ensure profile → fetch bands → merge)
   useEffect(() => {
     if (!open) return;
     let mounted = true;
@@ -113,19 +120,21 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
           data: { user },
         } = await sb.auth.getUser();
         if (!mounted) return;
+
         if (!user) {
           setOpen(false);
           router.replace('/login?next=/dashboard');
           return;
         }
 
+        // Best-effort profile ensure (ignore “function not found”)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
           if (rpcErr && rpcErr.code !== '42883') {
-            console.warn('[ensure_profile] RPC error:', rpcErr.message);
+            console.warn('[ensure_profile]', rpcErr.message);
           }
-        } catch (e) {
-          console.warn('[ensure_profile] RPC call failed:', e);
+        } catch {
+          /* noop */
         }
 
         const { data: rows, error: mErr } = await sb
@@ -138,7 +147,7 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
           .map((r: any) => r?.bands)
           .filter(Boolean) as BandLite[];
 
-        if (mounted) setBands(mapped);
+        if (mounted) setBands((prev) => mergeLocalBands(prev, mapped));
       } catch (e) {
         if (!mounted) return;
         console.error(e);
@@ -156,9 +165,21 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
       mounted = false;
       sub?.subscription?.unsubscribe?.();
     };
-  }, [open, router]);
+  }, [open, router, setOpen]);
 
-  const refreshBands = useCallback(async () => {
+  // Global open/close events (SideNav/BottomNav)
+  useEffect(() => {
+    const openHandler = () => setOpen(true);
+    const closeHandler = () => setOpen(false);
+    window.addEventListener('global-create:open', openHandler);
+    window.addEventListener('global-create:close', closeHandler);
+    return () => {
+      window.removeEventListener('global-create:open', openHandler);
+      window.removeEventListener('global-create:close', closeHandler);
+    };
+  }, [setOpen]);
+
+  const refreshBandsLocal = useCallback(async () => {
     const sb = supabaseBrowser();
     const {
       data: { user },
@@ -175,95 +196,101 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
       .map((r: any) => r?.bands)
       .filter(Boolean) as BandLite[];
 
-    setBands(mapped);
+    setBands((prev) => mergeLocalBands(prev, mapped));
   }, []);
 
+  // Create Band via RPC (returns the created row)
   const createBand = useCallback(async () => {
-    if (!bandName.trim()) return;
+    const name = bandName.trim();
+    if (!name) return;
+
     try {
       setCreatingBand(true);
       setError(null);
 
       const sb = supabaseBrowser();
 
-      // RPC should return [{ id, name }]
-      const { data: created, error } = await sb.rpc('create_band', {
-        p_name: bandName.trim(),
+      // Create via RPC — must return { id, name } (or [{ id, name }])
+      const { data: rpcData, error: rpcErr } = await sb.rpc('create_band', {
+        p_name: name,
       });
-      if (error) throw error;
+      if (rpcErr) throw rpcErr;
 
-      let newBand: BandLite | null =
-        Array.isArray(created) && created[0] ? (created[0] as BandLite) : null;
-
-      // Fallback: fetch most recent admin band if RPC doesn't return data
-      if (!newBand) {
-        type AdminBandRow = {
-          role: string;
-          band: { id: string; name: string; created_at: string };
+      let newBand: { id: string; name: string } | null = null;
+      if (Array.isArray(rpcData)) {
+        const row = rpcData[0];
+        if (row?.id && row?.name)
+          newBand = { id: String(row.id), name: String(row.name) };
+      } else if (rpcData && (rpcData as any).id && (rpcData as any).name) {
+        newBand = {
+          id: String((rpcData as any).id),
+          name: String((rpcData as any).name),
         };
-
-        const { data: rows } = await sb
-          .from('band_members')
-          .select('role, band:bands(id, name, created_at)')
-          .eq('role', 'admin')
-          .order('created_at', { referencedTable: 'bands', ascending: false })
-          .limit(1)
-          .returns<AdminBandRow[]>();
-
-        const b = rows?.[0]?.band;
-        if (b) newBand = { id: b.id, name: b.name };
       }
 
-      await refreshBands();
-      if (newBand) setEventBand(newBand);
+      if (!newBand)
+        throw new Error('create_band did not return a band row (id, name).');
 
-      const shownName = newBand?.name ?? bandName.trim();
+      // Notify parent immediately + broadcast (for any other listeners)
+      onBandCreated?.(newBand);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('bands:created', { detail: newBand })
+        );
+      }
+
+      // Optimistically show in the modal’s local list
+      setBands((prev) => mergeLocalBands(prev, [newBand]));
+
+      // Refresh local list from server (merge to avoid clobber)
+      await refreshBandsLocal();
+
+      // Reset UI
+      setEventBand(newBand);
       setBandName('');
       setStep('menu');
       setOpen(false);
-      toast(`Created ${shownName}`);
     } catch (e) {
+      console.error('[createBand]', e);
       setError(errMsg(e) || 'Could not create band');
     } finally {
       setCreatingBand(false);
     }
-  }, [bandName, refreshBands]);
+  }, [bandName, onBandCreated, refreshBandsLocal, setOpen]);
 
-  const goNewEvent = () => {
-    if (!hasBands) {
-      setStep('newBand');
-      return;
-    }
-    if (eventBand) {
-      setOpen(false);
-      router.push(`/bands/${eventBand.id}/events/new`);
-    }
-  };
-
-  // Optional trigger (DON'T use 'icon' inside BottomNavigationAction)
-  const TriggerEl =
-    trigger === 'button' ? (
-      <Button
-        variant="contained"
-        startIcon={<AddIcon />}
-        color="success"
-        onClick={() => setOpen(true)}
-        sx={{ borderRadius: '9999px' }}
-      >
-        Create
-      </Button>
-    ) : trigger === 'icon' ? (
-      <Tooltip title="Create">
-        <IconButton
+  // Optional trigger button (icon/button/none)
+  const TriggerEl = useMemo(() => {
+    if (trigger === 'button') {
+      return (
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
           color="success"
           onClick={() => setOpen(true)}
-          aria-label="Create"
-          size={isMobile ? 'medium' : 'large'}
+          sx={{ borderRadius: '9999px' }}
         >
-          <AddIcon />
-        </IconButton>
-      </Tooltip>
-    ) : null;
+          Create
+        </Button>
+      );
+    }
+    if (trigger === 'icon') {
+      return (
+        <Tooltip title="Create">
+          <Button
+            color="success"
+            onClick={() => setOpen(true)}
+            aria-label="Create"
+            size={isMobile ? 'medium' : 'large'}
+            startIcon={<AddIcon />}
+            sx={{ minWidth: 0, px: 1.25, borderRadius: 9999 }}
+          >
+            {!isMobile && 'Create'}
+          </Button>
+        </Tooltip>
+      );
+    }
+    return null;
+  }, [trigger, isMobile, setOpen]);
 
   return (
     <>
@@ -358,7 +385,13 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
 
                 <Button
                   variant="contained"
-                  onClick={goNewEvent}
+                  onClick={() => {
+                    if (!hasBands) return setStep('newBand');
+                    if (eventBand) {
+                      setOpen(false);
+                      router.push(`/bands/${eventBand.id}/events/new`);
+                    }
+                  }}
                   disabled={hasBands && !eventBand}
                 >
                   Continue
@@ -407,22 +440,6 @@ export default forwardRef<GlobalCreateHandle, Props>(function GlobalCreate(
           )}
         </DialogContent>
       </Dialog>
-
-      <Snackbar
-        open={!!snack}
-        autoHideDuration={2500}
-        onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnack(null)}
-          severity="success"
-          variant="filled"
-          sx={{ width: '100%', borderRadius: 2 }}
-        >
-          {snack}
-        </Alert>
-      </Snackbar>
     </>
   );
-});
+}
