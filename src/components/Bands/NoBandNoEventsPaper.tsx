@@ -54,7 +54,6 @@ export default function NoBandsNoEventsPaper({
   subtitle,
   showLogo,
   center = true,
-  // full-bleed: both cards same width across breakpoints
   maxWidth = '100%',
   contentMaxWidth = '100%',
 }: Props) {
@@ -77,7 +76,6 @@ export default function NoBandsNoEventsPaper({
     <Paper
       variant="glass"
       sx={{
-        // stretch the container to the section width at ALL breakpoints
         width: '100%',
         maxWidth, // defaults to 100%
         mx: 0, // no centering margin
@@ -85,13 +83,11 @@ export default function NoBandsNoEventsPaper({
         alignSelf: 'stretch', // if used inside flex
       }}
     >
-      {/* Add a small inner gutter that scales down on larger screens
-          so we get closer to edges without touching */}
       <CardContent sx={{ px: { xs: 1.25, sm: 1.5, md: 2 }, pt: 0, pb: 0 }}>
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '1fr auto' }, // text left / CTA right on desktop
+            gridTemplateColumns: { xs: '1fr', md: '1fr auto' },
             alignItems: { xs: 'stretch', md: 'center' },
             gap: { xs: 2, md: 3 },
             pt: { xs: 1.25, sm: 1.5, md: 1.75 },
@@ -110,7 +106,7 @@ export default function NoBandsNoEventsPaper({
           >
             {_showLogo && (
               <Image
-                src="/logo.png" // swap to transparent asset if available
+                src="/logo.png"
                 alt="Amplee"
                 width={48}
                 height={48}
@@ -153,7 +149,7 @@ export default function NoBandsNoEventsPaper({
               md: 'flex-end',
             }}
             alignItems="center"
-            sx={{ width: '100%', px: { xs: 1, sm: 0 } }} // tiny inset on mobile
+            sx={{ width: '100%', px: { xs: 1, sm: 0 } }}
           >
             <Button
               variant="contained"
