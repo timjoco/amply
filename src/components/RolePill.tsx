@@ -22,7 +22,6 @@ const pulse = keyframes`
   100% { transform: translateZ(0) scale(1);    opacity: .75; }
 `;
 
-// Convert any SxProps<Theme> (object | fn | array) into a single plain object
 function toObjectSx(
   sx: SxProps<Theme> | undefined,
   theme: Theme
@@ -108,7 +107,6 @@ export default function RolePill({ role, size = 'small', sx, ...rest }: Props) {
               }),
         };
 
-        // Merge user sx (no arrays) into a single plain object
         const user = toObjectSx(sx, theme);
         return { ...base, ...user };
       }}
