@@ -1,50 +1,29 @@
 import type { Band, MembershipRole } from '@/types/db';
 
-/**
- * A band record enriched with the current user's membership role.
- * Example roles supported here: 'admin' | 'member'
- * 'editor' to be added here update normalizeRole + sort order.)
- */
-export type BandWithRole = Band & { role: MembershipRole };
+/** A band record enriched with the current user's membership role. */
+export type BandWithRole = Band & { role?: MembershipRole }; // Band already has avatar_url
 
-/** Minimal shape for a related band returned from Supabase joins. */
-type BandLite = { id?: string | null; name?: string | null };
+/** Minimal shape from Supabase join. */
+type BandLite = {
+  id?: string | null;
+  name?: string | null;
+  avatar_url?: string | null;
+};
 
-/**
- * Row shape returned by:
- *   from('band_members').select('role, bands(id, name)')
- * Supabase may return `bands` as a single object or an array depending
- * on the join; we handle both.
- */
+/** Row shape returned by: from('band_members').select('role, bands(id, name, avatar_url)') */
 export type RawMembershipRow = {
   role?: string | null;
   bands?: BandLite | BandLite[] | null;
 };
 
-/**
- * Normalize any incoming role-like value to a supported MembershipRole.
- * - Lowercases and trims input.
- * - Falls back to 'member' if unexpected.
- * NOTE: 'editor', to be added to the allowlist here.
- */
-export function normalizeRole(role: unknown): MembershipRole {
+export function normalizeRole(role: unknown): MembershipRole | undefined {
   const r = String(role ?? '')
     .toLowerCase()
     .trim();
   if (r === 'admin' || r === 'member') return r;
-  console.warn(
-    '[normalizeRole] unexpected role, defaulting to "member":',
-    role
-  );
-  return 'member';
+  return undefined;
 }
 
-/**
- * Convert raw membership join rows into clean BandWithRole items.
- * - Accepts both `bands` as object or array (uses the first element).
- * - Filters out rows without a valid id/name.
- * - Normalizes the role via `normalizeRole`.
- */
 export function mapMembershipRowsToBands(
   rows: RawMembershipRow[] | null | undefined
 ): BandWithRole[] {
@@ -54,7 +33,6 @@ export function mapMembershipRowsToBands(
       const b: BandLite | undefined = Array.isArray(raw)
         ? raw[0]
         : raw ?? undefined;
-
       const id = b?.id ?? undefined;
       const name = (b?.name ?? '').trim();
       if (!id || !name) return null;
@@ -62,23 +40,23 @@ export function mapMembershipRowsToBands(
       return {
         id: String(id),
         name: String(name),
-        role: normalizeRole(r.role),
+        avatar_url: b?.avatar_url ?? null, // ← carry it through
+        role: normalizeRole(r.role), // may be undefined
       } as BandWithRole;
     })
     .filter((x): x is BandWithRole => Boolean(x));
 }
 
-/**
- * Stable sort that prioritizes bands by role, then alphabetically by name.
- * Current priority: admin (0) before member (1).
- * once 'editor' is added, extend the order map accordingly.
- */
+/** Admin first, then member, then unknown roles last. */
 export function sortBandsByRolePriority(bands: BandWithRole[]): BandWithRole[] {
-  const order: Record<MembershipRole, number> = {
+  const order: Record<Exclude<MembershipRole, never> | 'unknown', number> = {
     admin: 0,
     member: 1,
+    unknown: 2,
   };
-  return [...bands].sort(
-    (a, b) => order[a.role] - order[b.role] || a.name.localeCompare(b.name)
-  );
+  return [...bands].sort((a, b) => {
+    const aKey = a.role ?? 'unknown';
+    const bKey = b.role ?? 'unknown';
+    return order[aKey] - order[bKey] || a.name.localeCompare(b.name);
+  });
 }

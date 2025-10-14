@@ -4,6 +4,7 @@ export type MembershipRole = 'admin' | 'member';
 export type Band = {
   id: string;
   name: string;
+  avatar_url: string | null;
 };
 
 export type BandMembershipRow = {
