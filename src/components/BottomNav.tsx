@@ -1,10 +1,11 @@
+// src/components/BottomNav.tsx
 'use client';
 
+import GlobalCreate, { GlobalCreateHandle } from '@/components/GlobalCreate';
 import AccountAvatar from '@/components/Profile/AccountAvatar';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
-import LibraryMusicOutlinedIcon from '@mui/icons-material/LibraryMusicOutlined';
-import DashboardIcon from '@mui/icons-material/SpaceDashboard';
+import AddIcon from '@mui/icons-material/Add';
+import HomeFilledIcon from '@mui/icons-material/HomeFilled';
 import {
   BottomNavigation,
   BottomNavigationAction,
@@ -13,14 +14,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
-  { href: '/bands', label: 'Bands', Icon: LibraryMusicOutlinedIcon },
-  { href: '/events', label: 'Events', Icon: EventOutlinedIcon },
-  // index 3 = Account (/settings)
-];
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function BottomNav() {
   const router = useRouter();
@@ -28,10 +22,28 @@ export default function BottomNav() {
   const sb = useMemo(() => supabaseBrowser(), []);
   const [initials, setInitials] = useState('U');
   const [mounted, setMounted] = useState(false);
+  const createRef = useRef<GlobalCreateHandle>(null);
 
+  // 🔹 NEW: manual selection override
+  const [manualIndex, setManualIndex] = useState<number | null>(null);
+
+  const HOME_INDEX = 0;
+  const CREATE_INDEX = 1;
+  const ACCOUNT_INDEX = 2;
+
+  useEffect(() => setMounted(true), []);
+
+  // Listen for the "settings closed" event to snap selection to Home immediately
   useEffect(() => {
-    setMounted(true);
+    const handler = () => setManualIndex(HOME_INDEX);
+    window.addEventListener('amplee:settings-closed', handler);
+    return () => window.removeEventListener('amplee:settings-closed', handler);
   }, []);
+
+  // When pathname leaves /settings, clear manual override so routing controls selection again
+  useEffect(() => {
+    if (!pathname?.startsWith('/settings')) setManualIndex(null);
+  }, [pathname]);
 
   useEffect(() => {
     (async () => {
@@ -41,10 +53,9 @@ export default function BottomNav() {
       if (!user) return;
       const { data: profile } = await sb
         .from('profiles')
-        .select('first_name, last_name')
+        .select('first_name,last_name')
         .eq('id', user.id)
         .maybeSingle();
-
       const name =
         [profile?.first_name, profile?.last_name]
           .filter(Boolean)
@@ -65,15 +76,10 @@ export default function BottomNav() {
     })();
   }, [sb]);
 
-  // Compute selected index (only after mount to avoid SSR mismatch)
   const selectedIndex = mounted
-    ? pathname?.startsWith('/settings')
-      ? 3
-      : (() => {
-          const idx = navItems.findIndex((i) => pathname?.startsWith(i.href));
-          return idx === -1 ? 0 : idx;
-        })()
-    : 0;
+    ? manualIndex ??
+      (pathname?.startsWith('/settings') ? ACCOUNT_INDEX : HOME_INDEX)
+    : HOME_INDEX;
 
   if (!mounted) return null;
 
@@ -89,36 +95,37 @@ export default function BottomNav() {
         zIndex: (t) => t.zIndex.fab,
       }}
     >
+      <GlobalCreate ref={createRef} trigger="none" />
+
       <BottomNavigation
         value={selectedIndex}
         onChange={(_e, newValue) => {
-          const href = newValue === 3 ? '/settings' : navItems[newValue]?.href;
-          if (href) router.push(href);
+          if (newValue === CREATE_INDEX) {
+            (document.activeElement as HTMLElement | null)?.blur?.(); // 👈
+            createRef.current?.open();
+            return;
+          }
+          const href = newValue === ACCOUNT_INDEX ? '/settings' : '/dashboard';
+          router.push(href);
         }}
         showLabels
         sx={(t) => ({
           px: 0.25,
-
-          // pop animation
           '@keyframes pop': {
             '0%': { transform: 'scale(1)' },
             '50%': { transform: 'scale(1.12)' },
             '100%': { transform: 'scale(1)' },
           },
-
           '& .MuiBottomNavigationAction-root': {
             minWidth: 0,
             mx: 0.25,
             px: 0.25,
             borderRadius: 2,
             color: alpha(t.palette.text.primary, 0.6),
-
             '& .MuiSvgIcon-root': {
               fontSize: 22,
               transition: 'color .15s ease, transform .15s ease',
             },
-
-            // Tiny labels
             '& .MuiBottomNavigationAction-label': {
               fontSize: 10,
               lineHeight: 1,
@@ -127,14 +134,10 @@ export default function BottomNav() {
               transition: 'color .15s ease, opacity .15s ease',
               opacity: 0.85,
             },
-
-            // No bg on hover/selected
             '&:hover': {
               backgroundColor: 'transparent',
               color: alpha(t.palette.text.primary, 0.8),
             },
-
-            // Selected: white icon/label + pop
             '&.Mui-selected': {
               color: t.palette.common.white,
               backgroundColor: 'transparent',
@@ -143,7 +146,6 @@ export default function BottomNav() {
               '& .MuiAvatar-root': { animation: 'pop 180ms ease-out' },
             },
           },
-
           ...(t.palette.mode === 'dark' && {
             '& .MuiBottomNavigationAction-root:not(.Mui-selected)': {
               color: alpha(t.palette.common.white, 0.75),
@@ -151,13 +153,10 @@ export default function BottomNav() {
           }),
         })}
       >
-        {navItems.map(({ href, label, Icon }) => (
-          <BottomNavigationAction key={href} label={label} icon={<Icon />} />
-        ))}
-
-        {/* Account tab (index 3) */}
+        <BottomNavigationAction icon={<HomeFilledIcon />} />
+        <BottomNavigationAction icon={<AddIcon />} />
         <BottomNavigationAction
-          label="Account"
+          id="nav-account"
           icon={
             <Box
               sx={(t) => ({
@@ -176,7 +175,6 @@ export default function BottomNav() {
               <AccountAvatar size={24}>{initials}</AccountAvatar>
             </Box>
           }
-          onClick={() => router.push('/settings')}
         />
       </BottomNavigation>
     </Paper>

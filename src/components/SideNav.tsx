@@ -1,30 +1,31 @@
 'use client';
 
 import AccountMenu from '@/components/AccountMenu';
+import GlobalCreate, { GlobalCreateHandle } from '@/components/GlobalCreate';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import EventIcon from '@mui/icons-material/EventOutlined';
-import LibraryMusicIcon from '@mui/icons-material/LibraryMusicOutlined';
-import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
+
+import AddIcon from '@mui/icons-material/Add';
+import HomeIcon from '@mui/icons-material/HomeRounded';
+
 import { Box, Button, Divider, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const NAV_WIDTH = 240;
 
-const items = [
-  { href: '/dashboard', label: 'Dashboard', Icon: SpaceDashboardIcon },
-  { href: '/bands', label: 'Bands', Icon: LibraryMusicIcon },
-  { href: '/events', label: 'Events', Icon: EventIcon },
-];
+const primaryItems = [{ href: '/dashboard', label: 'Home', Icon: HomeIcon }];
 
-// Side nav is exclusively for logged-in users
 export default function SideNav() {
   const pathname = usePathname();
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const createRef = useRef<GlobalCreateHandle>(null);
 
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [, setInitials] = useState('U');
+
+  // Auth state
   useEffect(() => {
     const supabase = supabaseBrowser();
 
@@ -38,6 +39,45 @@ export default function SideNav() {
 
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
+
+  // Derive initials for avatar (after authed)
+  useEffect(() => {
+    if (authed !== true) return;
+
+    (async () => {
+      const sb = supabaseBrowser();
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const name =
+        [profile?.first_name, profile?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() ||
+        (user.user_metadata?.name as string | undefined) ||
+        user.email ||
+        '';
+
+      const derived =
+        name
+          .split(/\s+/)
+          .map((p) => p[0])
+          .filter(Boolean)
+          .slice(0, 2)
+          .join('')
+          .toUpperCase() || 'U';
+
+      setInitials(derived);
+    })();
+  }, [authed]);
 
   if (authed !== true) return null;
 
@@ -61,6 +101,7 @@ export default function SideNav() {
         gap: 1.5,
       })}
     >
+      {/* Logo */}
       <Box sx={{ px: 1, pb: 1 }}>
         <Link
           href="/dashboard"
@@ -69,12 +110,7 @@ export default function SideNav() {
           style={{ textDecoration: 'none', color: 'inherit' }}
         >
           <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              pr: 0.5,
-            }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pr: 0.5 }}
           >
             <Image
               src="/logo.png"
@@ -82,10 +118,7 @@ export default function SideNav() {
               width={28}
               height={28}
               priority
-              style={{
-                display: 'block',
-                borderRadius: 6,
-              }}
+              style={{ display: 'block', borderRadius: 6 }}
             />
             <Typography
               variant="h6"
@@ -96,13 +129,17 @@ export default function SideNav() {
           </Box>
         </Link>
       </Box>
+
       <Divider
         sx={(t) => ({ borderColor: alpha(t.palette.primary.main, 0.18) })}
       />
 
-      {/* Primary nav */}
+      {/* Mount GlobalCreate (no trigger; we'll open via ref) */}
+      <GlobalCreate ref={createRef} trigger="none" />
+
+      {/* Primary nav (Home) */}
       <Stack spacing={0.75} sx={{ mt: 1 }}>
-        {items.map(({ href, label, Icon }) => {
+        {primaryItems.map(({ href, label, Icon }) => {
           const active = pathname?.startsWith(href);
           return (
             <Button
@@ -138,9 +175,88 @@ export default function SideNav() {
             </Button>
           );
         })}
+
+        {/* CREATE — same styling as primary nav items (no green) */}
+        <Button
+          onClick={() => {
+            (document.activeElement as HTMLElement | null)?.blur?.(); // 👈
+            createRef.current?.open();
+          }}
+          startIcon={<AddIcon />}
+          color="inherit"
+          sx={(t) => ({
+            justifyContent: 'flex-start',
+            borderRadius: 2,
+            px: 1.25,
+            minHeight: 40,
+            textTransform: 'none',
+            fontWeight: 600,
+            letterSpacing: 0.2,
+            border: '1px solid',
+            // not "active" (no route), so use the unselected state styling
+            borderColor: alpha(t.palette.primary.main, 0.18),
+            backgroundColor: 'transparent',
+            '&:hover': {
+              backgroundColor: alpha('#7C3AED', 0.08),
+              borderColor: alpha(t.palette.primary.main, 0.35),
+            },
+            '& .MuiButton-startIcon': { mr: 1 },
+          })}
+        >
+          Create
+        </Button>
       </Stack>
 
+      {/* Secondary nav (Profile with avatar) */}
+      {/* <Stack spacing={0.75} sx={{ mt: 1 }}>
+        {secondaryItems.map(({ href, label, Icon }) => {
+          const active = pathname?.startsWith(href);
+          const startIcon =
+            href === '/settings' ? (
+              <AccountAvatar size={20}>{initials}</AccountAvatar>
+            ) : (
+              <Icon />
+            );
+
+          return (
+            <Button
+              key={href}
+              component={Link}
+              href={href}
+              startIcon={startIcon}
+              color="inherit"
+              prefetch={false}
+              sx={(t) => ({
+                justifyContent: 'flex-start',
+                borderRadius: 2,
+                px: 1.25,
+                minHeight: 40,
+                textTransform: 'none',
+                fontWeight: 600,
+                letterSpacing: 0.2,
+                border: '1px solid',
+                borderColor: active
+                  ? alpha(t.palette.primary.main, 0.35)
+                  : alpha(t.palette.primary.main, 0.18),
+                backgroundColor: active
+                  ? alpha('#7C3AED', 0.12)
+                  : 'transparent',
+                '&:hover': {
+                  backgroundColor: alpha('#7C3AED', 0.08),
+                  borderColor: alpha(t.palette.primary.main, 0.35),
+                },
+                '& .MuiButton-startIcon': { mr: 1 },
+              })}
+            >
+              {label}
+            </Button>
+          );
+        })}
+      </Stack> */}
+
       <Box sx={{ flex: 1 }} />
+
+      {/* Account menu (avatar dropdown) */}
       <Box
         sx={{ display: 'flex', justifyContent: 'flex-start', px: 0.5, pb: 0.5 }}
       >
