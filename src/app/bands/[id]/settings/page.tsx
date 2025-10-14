@@ -1,9 +1,7 @@
 // app/bands/[id]/settings/page.tsx
 import { createClient } from '@/utils/supabase/server';
-import { Button, Container, Stack, Typography } from '@mui/material';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import DangerZone from './DangerZone';
+import SettingsDialog from './SettingsDialog';
 
 export default async function BandSettingsPage({
   params,
@@ -11,55 +9,39 @@ export default async function BandSettingsPage({
   params: Promise<{ id: string }>;
 }) {
   const supabase = createClient();
-
   const { id } = await params;
 
-  // Auth guard
+  // Auth
   const {
     data: { user },
-    error: uErr,
   } = await supabase.auth.getUser();
-  if (uErr || !user) redirect('/login');
+  if (!user) redirect('/login');
 
-  // Fetch band
-  const { data: band, error: bErr } = await supabase
+  // Band (exists?)
+  const { data: band } = await supabase
     .from('bands')
-    .select('id, name')
+    .select('id, name, avatar_url')
     .eq('id', id)
-    .single();
+    .maybeSingle();
+  if (!band) notFound();
 
-  if (bErr || !band) notFound();
+  // Membership (must be a member to access settings at all)
+  const { data: mem } = await supabase
+    .from('band_members')
+    .select('role')
+    .eq('band_id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!mem) redirect(`/bands/${id}`); // not a member → bounce back
 
-  // Is current user an admin?
-  const { data: adminFlag, error: aErr } = await supabase.rpc('is_band_admin', {
-    p_band_id: id,
-  });
-  const isAdmin = aErr ? false : Boolean(adminFlag);
+  const isAdmin = mem.role === 'admin';
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ mb: 3 }}
-      >
-        <Typography variant="h4" fontWeight={700} letterSpacing={0.3}>
-          Band Settings
-        </Typography>
-        <Button
-          component={Link}
-          href={`/bands/${band.id}`}
-          variant="text"
-          size="small"
-          sx={{ textTransform: 'none' }}
-        >
-          Back to Band Page
-        </Button>
-      </Stack>
-
-      {/* Danger zone: leave/delete actions */}
-      <DangerZone bandId={band.id} bandName={band.name} isAdmin={isAdmin} />
-    </Container>
+    <SettingsDialog
+      bandId={band.id}
+      bandName={band.name}
+      avatarPath={band.avatar_url ?? undefined}
+      isAdmin={isAdmin}
+    />
   );
 }
