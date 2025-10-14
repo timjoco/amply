@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import BandCard from '@/components/Bands/BandCard';
+import BandGrid from '@/components/Bands/BandGrid';
 import NoBandsNoEventsPaper from '@/components/Bands/NoBandNoEventsPaper';
-
-import GlobalCreate, { GlobalCreateHandle } from '@/components/GlobalCreate';
+import GlobalCreate from '@/components/GlobalCreate';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import {
   mapMembershipRowsToBands,
@@ -12,29 +11,19 @@ import {
   type BandWithRole,
 } from '@/utils/bands';
 
-import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
   alpha,
   Box,
-  Button,
   Card,
   CardActions,
   CardContent,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Skeleton,
   Stack,
-  TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -46,23 +35,39 @@ function getErrorMessage(e: unknown): string {
   }
 }
 
+/** Merge server results into current state without dropping optimistic items. */
+function mergeBands(current: BandWithRole[], incoming: BandWithRole[]) {
+  const map = new Map<string, BandWithRole>();
+  current.forEach((b) => map.set(b.id, b));
+  incoming.forEach((b) => {
+    const prev = map.get(b.id);
+    map.set(b.id, prev ? { ...prev, ...b } : b);
+  });
+  return sortBandsByRolePriority(Array.from(map.values()));
+}
+
 export default function DashboardClient() {
   const router = useRouter();
-  const theme = useTheme();
-  const isXs = useMediaQuery(theme.breakpoints.down('sm'));
+  const pathname = usePathname();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [bands, setBands] = useState<BandWithRole[]>([]);
-
   const [createOpen, setCreateOpen] = useState(false);
-  const [bandName, setBandName] = useState('');
-  const [creating, setCreating] = useState(false);
 
-  const createRef = useRef<GlobalCreateHandle>(null);
-  const pageGutterSx = {
-    mx: { xs: 1.5, sm: 2.5, md: 4 }, // horizontal margin for the whole section
-  } as const;
+  const match = pathname.match(/\/bands\/([0-9a-f-]{10,})/i);
+  const currentBandId = match?.[1];
+
+  const pageGutterSx = { mx: { xs: 1.5, sm: 2.5, md: 4 } } as const;
+
+  // Parent callback from GlobalCreate — optimistic prepend.
+  const handleBandCreated = (band: { id: string; name: string }) => {
+    setBands((prev) =>
+      prev.some((b) => b.id === band.id)
+        ? prev
+        : [{ id: band.id, name: band.name, role: 'admin' }, ...prev]
+    );
+  };
 
   const cardSx = (t: any) => ({
     height: '100%',
@@ -98,7 +103,6 @@ export default function DashboardClient() {
     fontWeight: 700,
   } as const;
 
-  // Load profile + bands
   useEffect(() => {
     const sb = supabaseBrowser();
     let mounted = true;
@@ -112,23 +116,19 @@ export default function DashboardClient() {
           data: { user },
         } = await sb.auth.getUser();
         if (!mounted) return;
-
         if (!user) {
           router.replace('/login?next=/dashboard');
           return;
         }
 
-        // Ensure a profile row exists (idempotent)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
-          if (rpcErr && rpcErr.code !== '42883') {
-            console.warn('[ensure_profile] RPC error:', rpcErr.message);
-          }
+          if (rpcErr && rpcErr.code !== '42883')
+            console.warn('[ensure_profile]', rpcErr.message);
         } catch (e) {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
 
-        // Bands via memberships
         const { data: rows, error: mErr } = await sb
           .from('band_members')
           .select('role, bands(id, name)')
@@ -136,8 +136,8 @@ export default function DashboardClient() {
         if (mErr) throw mErr;
 
         if (mounted) {
-          const list = sortBandsByRolePriority(mapMembershipRowsToBands(rows));
-          setBands(list);
+          const incoming = mapMembershipRowsToBands(rows);
+          setBands((prev) => mergeBands(prev, incoming));
         }
       } catch (e) {
         if (!mounted) return;
@@ -158,47 +158,62 @@ export default function DashboardClient() {
     };
   }, [router]);
 
-  const refreshBands = useCallback(async () => {
+  // Realtime: when a band_member row is inserted for me, fetch the band and prepend if missing.
+  useEffect(() => {
+    let isMounted = true;
     const sb = supabaseBrowser();
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    if (!user) return;
 
-    const { data: rows, error } = await sb
-      .from('band_members')
-      .select('role, bands(id, name)')
-      .eq('user_id', user.id);
-    if (error) throw error;
+    (async () => {
+      const { data: auth } = await sb.auth.getUser();
+      const userId = auth?.user?.id;
+      if (!userId) return;
 
-    setBands(sortBandsByRolePriority(mapMembershipRowsToBands(rows)));
+      const channel = sb
+        .channel('bands-for-me')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'band_members',
+            filter: `user_id=eq.${userId}`,
+          },
+          async (payload) => {
+            if (!isMounted) return;
+            const bandId = (payload.new as any)?.band_id;
+            if (!bandId) return;
+
+            const { data: band } = await sb
+              .from('bands')
+              .select('id, name')
+              .eq('id', bandId)
+              .single();
+            if (!band) return;
+
+            setBands((prev) => {
+              if (prev.some((b) => b.id === band.id)) return prev;
+              const role = (payload.new as any)?.role || 'member';
+              return [{ id: band.id, name: band.name, role }, ...prev];
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        isMounted = false;
+        sb.removeChannel(channel);
+      };
+    })();
   }, []);
-
-  const createBand = useCallback(async () => {
-    if (!bandName.trim()) return;
-    try {
-      setCreating(true);
-      setError(null);
-
-      const sb = supabaseBrowser();
-      const { error } = await sb.rpc('create_band', {
-        p_name: bandName.trim(),
-      });
-      if (error) throw error;
-
-      setCreateOpen(false);
-      setBandName('');
-      await refreshBands();
-    } catch (e) {
-      setError(getErrorMessage(e) || 'Could not create band');
-    } finally {
-      setCreating(false);
-    }
-  }, [bandName, refreshBands]);
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
-      <GlobalCreate ref={createRef} trigger="none" />
+      <GlobalCreate
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        trigger="none"
+        onBandCreated={handleBandCreated}
+      />
 
       <Stack spacing={1.5} sx={{ mb: 3 }}>
         <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
@@ -277,17 +292,17 @@ export default function DashboardClient() {
             </Box>
           ) : (
             <Box sx={{ ...pageGutterSx, mt: 1 }}>
-              <Box sx={gridSx}>
-                {bands.map((b) => (
-                  <BandCard
-                    key={b.id}
-                    id={b.id}
-                    name={b.name}
-                    bandRole={b.role}
-                    dense={isXs}
-                  />
-                ))}
-              </Box>
+              <BandGrid
+                tileSize={180}
+                selectedId={currentBandId}
+                bands={bands.map((b) => ({
+                  id: b.id,
+                  name: b.name,
+                  role: (b.role?.toLowerCase() === 'admin'
+                    ? 'admin'
+                    : 'member') as 'admin' | 'member',
+                }))}
+              />
             </Box>
           )}
 
@@ -301,7 +316,7 @@ export default function DashboardClient() {
           <Box sx={pageGutterSx}>
             <NoBandsNoEventsPaper
               kind="events"
-              onPrimary={() => createRef.current?.open()}
+              onPrimary={() => setCreateOpen(true)}
               maxWidth="100%"
               contentMaxWidth="100%"
               center
@@ -309,68 +324,6 @@ export default function DashboardClient() {
           </Box>
         </>
       )}
-
-      {/* Create band dialog (unchanged) */}
-      <Dialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        fullWidth
-        maxWidth="xs"
-        PaperProps={{
-          sx: (t) => ({
-            borderRadius: 3,
-            border: '1px solid',
-            borderColor: alpha(t.palette.primary.main, 0.28),
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
-            backdropFilter: 'blur(8px)',
-          }),
-        }}
-      >
-        <DialogTitle sx={{ pb: 1.5 }}>Create band</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Band name"
-            fullWidth
-            value={bandName}
-            onChange={(e) => setBandName(e.target.value)}
-            variant="outlined"
-            sx={(t) => ({
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '& fieldset': {
-                  borderColor: alpha(t.palette.primary.main, 0.28),
-                },
-                '&:hover fieldset': {
-                  borderColor: alpha(t.palette.primary.main, 0.45),
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: t.palette.primary.main,
-                },
-              },
-            })}
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setCreateOpen(false)}
-            sx={{ textTransform: 'none' }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={createBand}
-            disabled={creating || !bandName.trim()}
-            startIcon={creating ? <CircularProgress size={18} /> : <AddIcon />}
-            sx={{ borderRadius: 999, px: 2.25, textTransform: 'none' }}
-          >
-            {creating ? 'Creating…' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
