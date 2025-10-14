@@ -2,13 +2,16 @@
 'use client';
 
 import BandCard from '@/components/Bands/BandCard';
-import EmptyStateStartBand from '@/components/Bands/EmptyStateStartBand';
+import NoBandsNoEventsPaper from '@/components/Bands/NoBandNoEventsPaper';
+
+import GlobalCreate, { GlobalCreateHandle } from '@/components/GlobalCreate';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import {
   mapMembershipRowsToBands,
   sortBandsByRolePriority,
   type BandWithRole,
 } from '@/utils/bands';
+
 import AddIcon from '@mui/icons-material/Add';
 import {
   Alert,
@@ -23,7 +26,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Fab,
   Skeleton,
   Stack,
   TextField,
@@ -32,7 +34,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -47,8 +49,7 @@ function getErrorMessage(e: unknown): string {
 export default function DashboardClient() {
   const router = useRouter();
   const theme = useTheme();
-  const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
-
+  const isXs = useMediaQuery(theme.breakpoints.down('sm'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +58,11 @@ export default function DashboardClient() {
   const [createOpen, setCreateOpen] = useState(false);
   const [bandName, setBandName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  const createRef = useRef<GlobalCreateHandle>(null);
+  const pageGutterSx = {
+    mx: { xs: 1.5, sm: 2.5, md: 4 }, // horizontal margin for the whole section
+  } as const;
 
   const cardSx = (t: any) => ({
     height: '100%',
@@ -83,6 +89,13 @@ export default function DashboardClient() {
       md: 'repeat(3, minmax(0, 1fr))',
       xl: 'repeat(4, minmax(0, 1fr))',
     },
+  } as const;
+
+  const sectionTitleSx = {
+    mt: 1,
+    mb: 1,
+    letterSpacing: 0.3,
+    fontWeight: 700,
   } as const;
 
   // Load profile + bands
@@ -114,17 +127,6 @@ export default function DashboardClient() {
         } catch (e) {
           console.warn('[ensure_profile] RPC call failed:', e);
         }
-
-        // Greeting
-        // const { data: profile, error: pErr } = await sb
-        //   .from('profiles')
-        //   .select('first_name, email')
-        //   .eq('id', user.id)
-        //   .maybeSingle();
-        // if (pErr) console.warn('profiles select error:', pErr.message);
-        // if (mounted) {
-        //   setGreetingName(profile?.first_name || profile?.email || 'there');
-        // }
 
         // Bands via memberships
         const { data: rows, error: mErr } = await sb
@@ -196,8 +198,10 @@ export default function DashboardClient() {
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 4 }}>
+      <GlobalCreate ref={createRef} trigger="none" />
+
       <Stack spacing={1.5} sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
+        <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: 0.3 }}>
           Your Dashboard
         </Typography>
         {error && (
@@ -216,68 +220,97 @@ export default function DashboardClient() {
       </Stack>
 
       {loading ? (
-        <Box sx={gridSx}>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} sx={cardSx}>
-              <CardContent>
-                <Skeleton variant="text" width="60%" height={30} />
-                <Skeleton variant="text" width="40%" />
-                <Skeleton
-                  variant="rectangular"
-                  height={100}
-                  sx={{ mt: 2, borderRadius: 2 }}
-                />
-              </CardContent>
-              <CardActions
-                sx={(t) => ({
-                  borderTop: '1px solid',
-                  borderColor: alpha(t.palette.primary.main, 0.12),
-                })}
-              >
-                <Skeleton
-                  variant="rectangular"
-                  width={100}
-                  height={36}
-                  sx={{ borderRadius: 999 }}
-                />
-                <Skeleton
-                  variant="rectangular"
-                  width={120}
-                  height={36}
-                  sx={{ borderRadius: 999 }}
-                />
-              </CardActions>
-            </Card>
-          ))}
+        <Box sx={{ ...pageGutterSx }}>
+          <Box sx={gridSx}>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} sx={cardSx}>
+                <CardContent>
+                  <Skeleton variant="text" width="60%" height={30} />
+                  <Skeleton variant="text" width="40%" />
+                  <Skeleton
+                    variant="rectangular"
+                    height={100}
+                    sx={{ mt: 2, borderRadius: 2 }}
+                  />
+                </CardContent>
+                <CardActions
+                  sx={(t) => ({
+                    borderTop: '1px solid',
+                    borderColor: alpha(t.palette.primary.main, 0.12),
+                  })}
+                >
+                  <Skeleton
+                    variant="rectangular"
+                    width={100}
+                    height={36}
+                    sx={{ borderRadius: 999 }}
+                  />
+                  <Skeleton
+                    variant="rectangular"
+                    width={120}
+                    height={36}
+                    sx={{ borderRadius: 999 }}
+                  />
+                </CardActions>
+              </Card>
+            ))}
+          </Box>
         </Box>
-      ) : bands.length === 0 ? (
-        <EmptyStateStartBand onCreate={() => setCreateOpen(true)} />
       ) : (
-        <Box sx={gridSx}>
-          {bands.map((b) => (
-            <BandCard key={b.id} id={b.id} name={b.name} bandRole={b.role} />
-          ))}
-        </Box>
+        <>
+          {/* Bands section */}
+          <Box sx={pageGutterSx}>
+            <Typography variant="subtitle1" sx={sectionTitleSx}>
+              Bands
+            </Typography>
+          </Box>
+
+          {bands.length === 0 ? (
+            <Box sx={{ ...pageGutterSx, mt: 1 }}>
+              <NoBandsNoEventsPaper
+                kind="bands"
+                onPrimary={() => setCreateOpen(true)}
+                maxWidth="100%"
+                contentMaxWidth="100%"
+                center
+              />
+            </Box>
+          ) : (
+            <Box sx={{ ...pageGutterSx, mt: 1 }}>
+              <Box sx={gridSx}>
+                {bands.map((b) => (
+                  <BandCard
+                    key={b.id}
+                    id={b.id}
+                    name={b.name}
+                    bandRole={b.role}
+                    dense={isXs}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          {/* Events section */}
+          <Box sx={{ ...pageGutterSx, mt: 3 }}>
+            <Typography variant="subtitle1" sx={sectionTitleSx}>
+              Events
+            </Typography>
+          </Box>
+
+          <Box sx={pageGutterSx}>
+            <NoBandsNoEventsPaper
+              kind="events"
+              onPrimary={() => createRef.current?.open()}
+              maxWidth="100%"
+              contentMaxWidth="100%"
+              center
+            />
+          </Box>
+        </>
       )}
 
-      {/* Mobile FAB for creating a band */}
-      {!isMdUp && bands.length > 0 && !loading && (
-        <Fab
-          color="primary"
-          aria-label="Create band"
-          onClick={() => setCreateOpen(true)}
-          sx={{
-            position: 'fixed',
-            right: 16,
-            bottom: 88,
-            zIndex: (t) => t.zIndex.fab,
-          }}
-        >
-          <AddIcon />
-        </Fab>
-      )}
-
-      {/* Create band dialog */}
+      {/* Create band dialog (unchanged) */}
       <Dialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}

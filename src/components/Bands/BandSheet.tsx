@@ -26,7 +26,7 @@ import { alpha } from '@mui/material/styles';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-type TabKey = 'overview' | 'events' | 'roster' | 'chords';
+type TabKey = 'overview' | 'events' | 'roster';
 type MembershipRole = 'admin' | 'member';
 
 type ProfileLite = {
@@ -424,7 +424,6 @@ export default function BandSheet({ bandId }: Props) {
         <Tab label="Overview" value="overview" />
         <Tab label="Events" value="events" />
         <Tab label="Roster" value="roster" />
-        <Tab label="Chord Sheets" value="chords" />
       </Tabs>
 
       {/* Panels */}
@@ -499,12 +498,6 @@ export default function BandSheet({ bandId }: Props) {
             </>
           )}
         </Box>
-      )}
-
-      {tab === 'chords' && (
-        <Typography color="text.secondary" sx={{ mt: 2 }}>
-          Chord sheets library for this band.
-        </Typography>
       )}
 
       {/* Invite dialog */}

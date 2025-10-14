@@ -2,7 +2,6 @@
 
 import type { MembershipRole } from '@/types/db';
 import {
-  Box,
   Card,
   CardActionArea,
   CardActions,
@@ -17,9 +16,11 @@ type Props = {
   name: string;
   bandRole?: MembershipRole;
   height?: number;
+  dense?: boolean;
 };
 
-export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
+export default function BandCard({ id, name, bandRole, height = 175 }: Props) {
+  const FOOTER_H = 44;
   const normalizedRole: 'admin' | 'member' =
     (bandRole ?? '').toLowerCase() === 'admin' ? 'admin' : 'member';
 
@@ -28,6 +29,7 @@ export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
       elevation={0}
       sx={{
         height,
+        position: 'relative',
         borderRadius: 2,
         border: '1px solid transparent',
         background:
@@ -40,57 +42,70 @@ export default function BandCard({ id, name, bandRole, height = 220 }: Props) {
           boxShadow: '0 10px 24px rgba(0,0,0,.35)',
         },
       }}
+      variant="glass"
     >
       <CardActionArea
         component={Link}
         href={`/bands/${id}`}
-        sx={{
-          borderRadius: 2,
-          height: '100%',
-          flexGrow: 1, // this area takes remaining space above footer
-        }}
+        sx={{ borderRadius: 2 }}
       >
         <CardContent
           sx={{
-            height: '100%',
+            px: 1.5,
+            pt: 2,
+            pb: FOOTER_H,
+            '&:last-child': { pb: FOOTER_H },
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 1,
+            gap: 1.5,
           }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
-            {name}
-          </Typography>
-
           <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ textAlign: 'left' }}
+            variant="h3"
+            sx={{
+              fontWeight: 900,
+              lineHeight: 1.18,
+              letterSpacing: 0.2,
+              fontSize: {
+                xs: 'clamp(1.15rem, 6vw, 1.6rem)',
+                sm: 'clamp(1.35rem, 4.2vw, 1.9rem)',
+                md: 'clamp(1.6rem, 3vw, 2.2rem)',
+                lg: 'clamp(1.8rem, 2.4vw, 2.5rem)',
+              },
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              maxHeight: 'calc(2 * 1.18em)',
+              whiteSpace: 'normal',
+              overflowWrap: 'anywhere',
+              wordBreak: 'break-word',
+              hyphens: 'auto',
+            }}
           >
-            Manage events, members, and settings.
+            {name}
           </Typography>
         </CardContent>
       </CardActionArea>
 
-      {/* Non-clickable footer pinned to the bottom */}
       <CardActions
         disableSpacing
         sx={() => ({
-          px: 2,
-          py: 1.25,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: FOOTER_H,
+          px: 1.5,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-start',
+          gap: 1,
+
+          backgroundColor: 'transparent',
         })}
       >
-        {/* Current role pill (non-action) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <RolePill role={normalizedRole} />
-        </Box>
-
-        {/* Placeholder for future "band role" pill or other badges/actions */}
-        <Box />
+        <RolePill role={normalizedRole} />
       </CardActions>
     </Card>
   );
