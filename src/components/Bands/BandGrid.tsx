@@ -1,5 +1,6 @@
 'use client';
 
+import type { BandWithRole } from '@/utils/bands';
 import { Box } from '@mui/material';
 import { useEffect } from 'react';
 import BandTile from './BandTile';
@@ -12,7 +13,7 @@ export type BandLite = {
 };
 
 type Props = {
-  bands: BandLite[];
+  bands: BandWithRole[];
   selectedId?: string;
   tileSize?: number;
 };
@@ -52,9 +53,9 @@ export default function BandGrid({ bands, selectedId, tileSize = 180 }: Props) {
           id={b.id}
           name={b.name}
           bandRole={b.role}
-          avatarUrl={b.avatarUrl ?? undefined}
           selected={selectedId === b.id}
           size={tileSize}
+          avatarPath={b.avatar_url ?? undefined} // path like "bandId/uuid.jpg"
         />
       ))}
     </Box>

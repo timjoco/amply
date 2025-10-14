@@ -389,7 +389,8 @@ export default function BandSheet({ bandId }: Props) {
           <BandTitleMenu
             bandId={bandId}
             bandName={bandName}
-            onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
+            onInvite={() => setInviteOpen(true)}
+            isAdmin={myRole === 'admin'} // ← true for admins
           />
         </Box>
 

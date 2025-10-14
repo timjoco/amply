@@ -53,15 +53,25 @@ export default function RolePill({ role, size = 'small', sx, ...rest }: Props) {
           alignSelf: 'flex-start',
           display: 'inline-flex',
           width: 'auto',
-          maxWidth: 'max-content',
+          maxWidth: { xs: 120, sm: 'max-content' }, // <-- cap width on very small screens
           flexShrink: 0,
 
           borderRadius: 999,
-          px: 1.25,
+          // responsive root padding & height
+          px: { xs: 0.75, sm: 1.25 }, // <-- tighter on xs
+          height: { xs: 22, sm: 28 }, // <-- shorter on xs
           fontWeight: 800,
-          letterSpacing: 0.6,
+          letterSpacing: { xs: 0.4, sm: 0.6 }, // <-- slightly less letterspacing on xs
 
-          '& .MuiChip-label': { paddingInline: 0 },
+          // ensure inner label isn't adding extra padding
+          '& .MuiChip-label': {
+            paddingInline: 0,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            fontSize: { xs: 10, sm: 12 }, // <-- smaller font on xs
+            lineHeight: 1.1,
+          },
 
           ...(isAdmin
             ? {
@@ -77,16 +87,22 @@ export default function RolePill({ role, size = 'small', sx, ...rest }: Props) {
                 `,
                 position: 'relative',
                 overflow: 'visible',
+                // softer glow on xs to avoid overlapping nearby text
                 '&::after': {
                   content: '""',
                   position: 'absolute',
-                  inset: -6,
+                  inset: { xs: -2, sm: -6 }, // <-- smaller halo on xs
                   borderRadius: 999,
-                  background:
-                    'radial-gradient(closest-side, rgba(168,85,247,.35), transparent 70%)',
-                  filter: 'blur(6px)',
+                  background: {
+                    xs: 'transparent', // <-- disable halo on xs
+                    sm: 'radial-gradient(closest-side, rgba(168,85,247,.35), transparent 70%)',
+                  },
+                  filter: { xs: 'none', sm: 'blur(6px)' },
                   zIndex: -1,
-                  animation: `${pulse} 2.8s ease-in-out infinite`,
+                  animation: {
+                    xs: 'none',
+                    sm: `${pulse} 2.8s ease-in-out infinite`,
+                  },
                   pointerEvents: 'none',
                 },
                 transition: 'background-position .4s ease, box-shadow .2s ease',
