@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
@@ -16,10 +15,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  List,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
+  SwipeableDrawer,
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -27,13 +29,12 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import BandActionsDialog from './BandActionsDialog';
 
 type Props = {
   bandId: string;
   bandName: string;
   onInvite?: () => void;
-  /** true = admin sees Invite + Settings, false = member sees Leave only */
+  /** Admins see Invite + Settings; members see Leave */
   isAdmin?: boolean;
 };
 
@@ -46,14 +47,19 @@ export default function BandTitleMenu({
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
   const router = useRouter();
-
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const open = Boolean(anchorEl);
-
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [leaveErr, setLeaveErr] = useState<string | null>(null);
+
+  const BG = '#000000';
+  const SURFACE = '#1A1B1F';
+  const SURFACE_HOVER = 'rgba(255,255,255,0.06)';
+  const BORDER = 'rgba(255,255,255,0.10)';
+  const TEXT = 'rgba(255,255,255,0.96)';
+  const TEXT_DIM = 'rgba(255,255,255,0.72)';
 
   async function onConfirmLeave() {
     try {
@@ -64,20 +70,18 @@ export default function BandTitleMenu({
         data: { user },
       } = await sb.auth.getUser();
       if (!user) throw new Error('You must be signed in.');
-
-      // RLS: user can delete own membership
       const { error } = await sb
         .from('band_members')
         .delete()
         .eq('band_id', bandId)
         .eq('user_id', user.id);
-
       if (error) throw new Error(error.message);
-
       setLeaveOpen(false);
+      setSheetOpen(false);
       setAnchorEl(null);
       router.push('/dashboard');
       router.refresh?.();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setLeaveErr(e?.message ?? 'Failed to leave band');
     } finally {
@@ -85,13 +89,13 @@ export default function BandTitleMenu({
     }
   }
 
-  // ---------- Mobile ----------
+  // ---------- Mobile: Band title opens large bottom sheet (no edge swipe) ----------
   if (!isDesktop) {
     return (
       <>
         <ButtonBase
           type="button"
-          onClick={() => setActionsOpen(true)}
+          onClick={() => setSheetOpen(true)}
           disableRipple
           sx={{
             display: 'inline-flex',
@@ -130,17 +134,195 @@ export default function BandTitleMenu({
           <ChevronRightIcon sx={{ fontSize: 22, flex: '0 0 auto' }} />
         </ButtonBase>
 
-        <BandActionsDialog
-          open={actionsOpen}
-          onClose={() => setActionsOpen(false)}
-          bandId={bandId}
-          bandName={bandName}
-          onInvite={onInvite}
-          isAdmin={isAdmin}
-          onLeaveRequested={() => setLeaveOpen(true)}
-        />
+        <Box
+          role="button"
+          aria-label="Open band actions"
+          title="Open band actions"
+          onClick={() => setSheetOpen(true)}
+          sx={{
+            position: 'fixed',
+            right: 12,
+            bottom: `calc(56px + env(safe-area-inset-bottom, 0px) + 8px)`,
+            zIndex: 3,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.75,
+            px: 1,
+            py: 0.5,
+            height: 36,
+            borderRadius: 999,
+            bgcolor: 'rgba(255,255,255,0.10)',
+            color: 'rgba(255,255,255,0.96)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            userSelect: 'none',
+          }}
+        ></Box>
 
-        {/* Confirm leave dialog (mobile reuses same confirm) */}
+        <SwipeableDrawer
+          anchor="bottom"
+          open={sheetOpen}
+          onOpen={() => setSheetOpen(true)}
+          onClose={() => setSheetOpen(false)}
+          disableSwipeToOpen
+          ModalProps={{
+            keepMounted: true,
+            BackdropProps: {
+              sx: {
+                backgroundColor: `${BG}E6`, // ~90% black
+                backdropFilter: 'blur(2px)',
+              },
+            },
+          }}
+          PaperProps={{
+            sx: {
+              height: '88vh',
+              maxHeight: '95vh',
+              overflow: 'hidden',
+              bgcolor: SURFACE,
+              color: TEXT,
+              borderTop: `1px solid ${BORDER}`,
+              borderTopLeftRadius: 14,
+              borderTopRightRadius: 14,
+              boxShadow: '0 -20px 40px rgba(0,0,0,.6)',
+            },
+          }}
+        >
+          {/* Puller */}
+          <Box sx={{ display: 'grid', placeItems: 'center', pt: 1.25 }}>
+            <Box
+              sx={{
+                width: 38,
+                height: 4,
+                borderRadius: 2,
+                bgcolor: 'rgba(255,255,255,0.28)',
+              }}
+            />
+          </Box>
+
+          {/* Flexible, scrollable content */}
+          <Box
+            sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
+            {/* Header */}
+            <Box sx={{ px: 2, pt: 1, pb: 1 }}>
+              <Typography
+                variant="overline"
+                sx={{ color: TEXT_DIM, letterSpacing: 1, userSelect: 'none' }}
+              >
+                {bandName}
+              </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                flex: 1,
+                overflowY: 'auto',
+                borderTop: `1px solid ${BORDER}`,
+                '&::-webkit-scrollbar': { width: 10 },
+                '&::-webkit-scrollbar-thumb': {
+                  background: 'rgba(255,255,255,0.14)',
+                  borderRadius: 8,
+                  border: '2px solid transparent',
+                  backgroundClip: 'padding-box',
+                },
+              }}
+            >
+              <List sx={{ py: 0.5 }}>
+                {/* ADMIN: Invite */}
+                {isAdmin && onInvite && (
+                  <ListItemButton
+                    onClick={() => {
+                      setSheetOpen(false);
+                      onInvite();
+                    }}
+                    sx={{
+                      px: 2,
+                      py: 1.25,
+                      borderRadius: 1.5,
+                      mx: 1,
+                      '& .MuiListItemIcon-root': {
+                        minWidth: 44,
+                        color: TEXT_DIM,
+                      },
+                      '&:hover': { backgroundColor: SURFACE_HOVER },
+                    }}
+                  >
+                    <ListItemIcon>
+                      <GroupAddIcon />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Invite Band Members"
+                      primaryTypographyProps={{ fontWeight: 700, color: TEXT }}
+                      secondaryTypographyProps={{ color: TEXT_DIM }}
+                    />
+                  </ListItemButton>
+                )}
+
+                {/* ADMIN: Settings */}
+                {isAdmin && (
+                  <ListItemButton
+                    component={Link}
+                    href={`/bands/${bandId}/settings`}
+                    onClick={() => setSheetOpen(false)}
+                    sx={{
+                      px: 2,
+                      py: 1.25,
+                      borderRadius: 1.5,
+                      mx: 1,
+                      '& .MuiListItemIcon-root': {
+                        minWidth: 44,
+                        color: TEXT_DIM,
+                      },
+                      '&:hover': { backgroundColor: SURFACE_HOVER },
+                    }}
+                  >
+                    <ListItemIcon>
+                      <SettingsIcon />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Band Settings"
+                      primaryTypographyProps={{ fontWeight: 700, color: TEXT }}
+                    />
+                  </ListItemButton>
+                )}
+
+                {/* MEMBER: Leave only */}
+                {!isAdmin && (
+                  <ListItemButton
+                    onClick={() => {
+                      setSheetOpen(false);
+                      setLeaveOpen(true);
+                    }}
+                    sx={{
+                      px: 2,
+                      py: 1.25,
+                      borderRadius: 1.5,
+                      mx: 1,
+                      color: (t) => t.palette.error.light,
+                      '& .MuiListItemIcon-root': {
+                        minWidth: 44,
+                        color: 'inherit',
+                      },
+                      '&:hover': { backgroundColor: 'rgba(244,67,54,0.10)' },
+                    }}
+                  >
+                    <ListItemIcon>
+                      <LogoutIcon />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Leave Band"
+                      primaryTypographyProps={{ fontWeight: 800 }}
+                    />
+                  </ListItemButton>
+                )}
+              </List>
+            </Box>
+            <Box sx={{ borderTop: `1px solid ${BORDER}`, p: 1 }} />
+          </Box>
+        </SwipeableDrawer>
+
+        {/* Leave confirm */}
         <Dialog
           open={leaveOpen}
           onClose={() => (leaving ? null : setLeaveOpen(false))}
@@ -181,7 +363,7 @@ export default function BandTitleMenu({
     );
   }
 
-  // ---------- Desktop ----------
+  // ---------- Desktop: dropdown menu ----------
   const handleToggle = (e: React.MouseEvent<HTMLElement>) =>
     setAnchorEl(open ? null : e.currentTarget);
 
@@ -253,7 +435,6 @@ export default function BandTitleMenu({
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        {/* ADMIN: Invite */}
         {isAdmin && onInvite && (
           <MenuItem
             onClick={() => {
@@ -285,7 +466,6 @@ export default function BandTitleMenu({
           </MenuItem>
         )}
 
-        {/* ADMIN: Settings */}
         {isAdmin && (
           <MenuItem
             component={Link}
@@ -316,7 +496,6 @@ export default function BandTitleMenu({
           </MenuItem>
         )}
 
-        {/* MEMBER: Leave only */}
         {!isAdmin && (
           <MenuItem
             onClick={() => {
@@ -350,7 +529,7 @@ export default function BandTitleMenu({
         )}
       </Menu>
 
-      {/* Confirm leave dialog (desktop & mobile share this) */}
+      {/* Leave confirm */}
       <Dialog
         open={leaveOpen}
         onClose={() => (leaving ? null : setLeaveOpen(false))}

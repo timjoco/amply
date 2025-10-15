@@ -22,7 +22,6 @@ type Props = {
   primaryLabel?: string;
   title?: string;
   subtitle?: string;
-  // we’ll keep these for compatibility, but default to 100% so both are identical
   maxWidth?: ResponsiveStyleValue<number | string>;
   contentMaxWidth?: ResponsiveStyleValue<number | string>;
   showLogo?: boolean;
@@ -77,10 +76,10 @@ export default function NoBandsNoEventsPaper({
       variant="glass"
       sx={{
         width: '100%',
-        maxWidth, // defaults to 100%
-        mx: 0, // no centering margin
-        justifySelf: 'stretch', // if used inside a CSS grid
-        alignSelf: 'stretch', // if used inside flex
+        maxWidth,
+        mx: 0,
+        justifySelf: 'stretch',
+        alignSelf: 'stretch',
       }}
     >
       <CardContent sx={{ px: { xs: 1.25, sm: 1.5, md: 2 }, pt: 0, pb: 0 }}>

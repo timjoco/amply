@@ -25,6 +25,7 @@ import {
 import { alpha } from '@mui/material/styles';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import BandEventsList from './BandEventsList';
 
 type TabKey = 'overview' | 'events' | 'roster';
 type MembershipRole = 'admin' | 'member';
@@ -434,11 +435,7 @@ export default function BandSheet({ bandId }: Props) {
         </Typography>
       )}
 
-      {tab === 'events' && (
-        <Typography color="text.secondary" sx={{ mt: 2 }}>
-          Events list (filter, create, edit) goes here.
-        </Typography>
-      )}
+      {tab === 'events' && <BandEventsList bandId={bandId} />}
 
       {tab === 'roster' && (
         <Box sx={{ mt: 2 }}>
