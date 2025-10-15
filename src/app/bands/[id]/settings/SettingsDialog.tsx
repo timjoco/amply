@@ -32,8 +32,6 @@ type Props = {
   bandId: string;
   bandName: string;
   avatarPath?: string;
-  /** Optional: forwarded only; no conditional rendering here */
-  isAdmin?: boolean;
 };
 
 export default function SettingsDialog({
@@ -56,15 +54,16 @@ export default function SettingsDialog({
     };
   }, []);
 
-  // Discord-y dark palette
-  const BG = '#0B0A10'; // whole dialog bg
-  const SURFACE = '#101117'; // right content pane
-  const SURFACE_ALT = '#0E0F15'; // left rail
+  // Discord-like palette + rhythm
+  const BG = '#0B0A10';
+  const SURFACE = '#101117';
+  const SURFACE_ALT = '#0E0F15';
   const BORDER = 'rgba(255,255,255,0.10)';
   const TEXT = 'rgba(255,255,255,0.96)';
   const TEXT_DIM = 'rgba(255,255,255,0.72)';
+  const ROW_Y = 2; // vertical padding multiplier per row
+  const GAP_Y = 2; // spacing between stacked elements
 
-  // Left rail items (two only)
   const sections = [
     { id: 'profile', label: 'Band Profile' },
     { id: 'danger', label: 'Danger Zone' },
@@ -144,10 +143,12 @@ export default function SettingsDialog({
               letterSpacing: 1,
               display: 'block',
               mb: 1.25,
+              textTransform: 'uppercase',
             }}
           >
             {bandName}
           </Typography>
+
           <Stack spacing={0.5}>
             {sections.map((s) => (
               <Button
@@ -161,6 +162,8 @@ export default function SettingsDialog({
                   px: 1.5,
                   py: 1,
                   borderRadius: 1.5,
+                  fontWeight: 700,
+                  letterSpacing: 0.2,
                   '&:hover': {
                     bgcolor: 'rgba(255,255,255,0.06)',
                     color: TEXT,
@@ -173,13 +176,13 @@ export default function SettingsDialog({
           </Stack>
         </Box>
 
-        {/* Right content pane (no cards; plain sections with thin dividers) */}
+        {/* Right content pane (uniform rows on a flat surface) */}
         <Box
           ref={scrollRef}
           sx={{
             bgcolor: SURFACE,
             minHeight: '100%',
-            px: { xs: 2, md: 3 },
+            px: { xs: 2.5, md: 3 },
             py: { xs: 2, md: 3 },
             overflowY: 'auto',
             '&::-webkit-scrollbar': { width: 10 },
@@ -190,7 +193,7 @@ export default function SettingsDialog({
               backgroundClip: 'padding-box',
             },
 
-            // Neutralize any Card styles used inside the child components
+            // Neutralize any Card styles used inside children
             '& .MuiCard-root': {
               background: 'transparent',
               boxShadow: 'none',
@@ -198,12 +201,53 @@ export default function SettingsDialog({
             },
             '& .MuiCardHeader-root': { px: 0 },
             '& .MuiCardContent-root': { px: 0 },
+
+            // Make form inputs, labels, and buttons look consistent
+            '& .MuiFormLabel-root': { color: TEXT_DIM },
+            '& .MuiInputBase-root': {
+              color: TEXT,
+              background: 'transparent',
+            },
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: BORDER,
+            },
+            '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'rgba(255,255,255,0.18)',
+            },
+            '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline':
+              {
+                borderColor: 'rgba(255,255,255,0.26)',
+              },
+            '& .MuiButton-root': {
+              textTransform: 'none',
+              fontWeight: 700,
+              letterSpacing: 0.2,
+              borderRadius: 10,
+            },
           }}
         >
-          {/* Section: Band Profile (always rendered) */}
-          <Box id="profile" sx={{ py: 2 }}>
-            <Stack spacing={2}>
+          {/* ---------- Section: Band Profile ---------- */}
+          <Box id="profile" sx={{ py: ROW_Y }}>
+            <Typography
+              variant="h6"
+              sx={{
+                color: TEXT,
+                fontWeight: 800,
+                letterSpacing: 0.2,
+                mb: 0.75,
+              }}
+            >
+              Band Profile
+            </Typography>
+
+            <Typography variant="body2" sx={{ color: TEXT_DIM, mb: 1.5 }}>
+              Update your band’s public info. Changes save instantly.
+            </Typography>
+
+            <Stack spacing={GAP_Y}>
               <BandBasicsCard bandId={bandId} initialName={bandName} />
+
+              {/* Avatar editor */}
               <BandAvatarCard
                 bandId={bandId}
                 bandName={bandName}
@@ -213,14 +257,33 @@ export default function SettingsDialog({
             </Stack>
           </Box>
 
-          <Divider sx={{ borderColor: BORDER, my: 2 }} />
+          <Divider sx={{ borderColor: BORDER }} />
 
-          {/* Section: Danger Zone / Membership (always rendered; role handled internally) */}
-          <Box id="danger" sx={{ py: 2 }}>
-            <DangerZone bandId={bandId} bandName={bandName} />
+          {/* ---------- Section: Danger Zone ---------- */}
+          <Box id="danger" sx={{ py: ROW_Y }}>
+            <Typography
+              variant="h6"
+              sx={{
+                color: TEXT,
+                fontWeight: 800,
+                letterSpacing: 0.2,
+                mb: 0.75,
+              }}
+            >
+              Danger Zone
+            </Typography>
+
+            <Typography variant="body2" sx={{ color: TEXT_DIM, mb: 1.5 }}>
+              Leave or delete the band. Deleting is permanent.
+            </Typography>
+
+            <Stack spacing={GAP_Y}>
+              <DangerZone bandId={bandId} bandName={bandName} />
+            </Stack>
           </Box>
 
-          <Divider sx={{ borderColor: BORDER, mt: 2 }} />
+          {/* Bottom hairline to finish the rhythm */}
+          <Divider sx={{ borderColor: BORDER }} />
         </Box>
       </DialogContent>
     </Dialog>
