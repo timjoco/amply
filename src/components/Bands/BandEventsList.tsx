@@ -3,9 +3,7 @@
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import AddIcon from '@mui/icons-material/Add';
 import {
-  Button,
   Chip,
   CircularProgress,
   Paper,
@@ -28,7 +26,6 @@ type EventRow = {
 
 export default function BandEventsList({
   bandId,
-  showCreate = true,
 }: {
   bandId: string;
   /** Hide the "New Event" button if you're showing your own trigger elsewhere */
@@ -115,7 +112,7 @@ export default function BandEventsList({
 
   return (
     <Stack gap={1.5}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
+      {/* <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Typography variant="h6" fontWeight={800}>
           Events
         </Typography>
@@ -131,7 +128,7 @@ export default function BandEventsList({
             New Event
           </Button>
         )}
-      </Stack>
+      </Stack> */}
 
       {loading && (
         <Stack direction="row" gap={1} alignItems="center">
