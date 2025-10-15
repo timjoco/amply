@@ -95,7 +95,7 @@ export default function BottomNav() {
         onChange={(_e, newValue) => {
           if (newValue === CREATE_INDEX) {
             (document.activeElement as HTMLElement | null)?.blur?.();
-            // 🔔 open GlobalCreate via global event (no refs needed)
+
             window.dispatchEvent(new CustomEvent('global-create:open'));
             return;
           }
