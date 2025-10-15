@@ -3,6 +3,7 @@
 
 import BandGrid from '@/components/Bands/BandGrid';
 import NoBandsNoEventsPaper from '@/components/Bands/NoBandNoEventsPaper';
+import EventInboxList from '@/components/Events/EventInboxList';
 import GlobalCreate from '@/components/GlobalCreate';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import {
@@ -55,6 +56,7 @@ export default function DashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [bands, setBands] = useState<BandWithRole[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [eventsCount, setEventsCount] = useState<number | null>(null);
 
   const match = pathname.match(/\/bands\/([0-9a-f-]{10,})/i);
   const currentBandId = match?.[1];
@@ -295,47 +297,53 @@ export default function DashboardClient() {
       ) : (
         <>
           {/* Bands section */}
-          <Box sx={pageGutterSx}>
+          <Box sx={{ mt: 1.5, mx: { xs: -2, md: -3 } }}>
             <Typography variant="subtitle1" sx={sectionTitleSx}>
               Bands
             </Typography>
+
+            {bands.length === 0 ? (
+              <Box sx={{ ...pageGutterSx, mt: 1 }}>
+                <NoBandsNoEventsPaper
+                  kind="bands"
+                  onPrimary={() => setCreateOpen(true)}
+                  maxWidth="100%"
+                  contentMaxWidth="100%"
+                  center
+                />
+              </Box>
+            ) : (
+              <Box sx={{ ...pageGutterSx, mt: 1 }}>
+                <BandGrid
+                  tileSize={180}
+                  selectedId={currentBandId}
+                  bands={bands}
+                />
+              </Box>
+            )}
           </Box>
 
-          {bands.length === 0 ? (
-            <Box sx={{ ...pageGutterSx, mt: 1 }}>
-              <NoBandsNoEventsPaper
-                kind="bands"
-                onPrimary={() => setCreateOpen(true)}
-                maxWidth="100%"
-                contentMaxWidth="100%"
-                center
-              />
-            </Box>
-          ) : (
-            <Box sx={{ ...pageGutterSx, mt: 1 }}>
-              <BandGrid
-                tileSize={180}
-                selectedId={currentBandId}
-                bands={bands}
-              />
-            </Box>
-          )}
-
           {/* Events section */}
-          <Box sx={{ ...pageGutterSx, mt: 3 }}>
+          <Box sx={{ mt: 1.5, mx: { xs: -2, md: -3 } }}>
             <Typography variant="subtitle1" sx={sectionTitleSx}>
               Events
             </Typography>
-          </Box>
 
-          <Box sx={pageGutterSx}>
-            <NoBandsNoEventsPaper
-              kind="events"
-              onPrimary={() => setCreateOpen(true)}
-              maxWidth="100%"
-              contentMaxWidth="100%"
-              center
-            />
+            {eventsCount === 0 ? (
+              <Box sx={pageGutterSx}>
+                <NoBandsNoEventsPaper
+                  kind="events"
+                  onPrimary={() => setCreateOpen(true)}
+                  maxWidth="100%"
+                  contentMaxWidth="100%"
+                  center
+                />
+              </Box>
+            ) : (
+              <Box sx={{ mt: 1.5, mx: { xs: -2, md: -3 } }}>
+                <EventInboxList onLoaded={setEventsCount} />
+              </Box>
+            )}
           </Box>
         </>
       )}

@@ -4,13 +4,13 @@
 'use client';
 
 import { useCreateBand } from '@/hooks/useCreateBand';
+import { createEvent, type EventType } from '@/lib/events/createEvent';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import theme from '@/theme';
-
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
-import EventIcon from '@mui/icons-material/Event';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import {
   Alert,
   Autocomplete,
@@ -32,8 +32,8 @@ import {
   useMediaQuery,
 } from '@mui/material';
 
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const blurActive = () =>
   (document.activeElement as HTMLElement | null)?.blur?.();
@@ -94,7 +94,6 @@ export default function GlobalCreate({
     [isControlled, onOpenChange]
   );
 
-  const [step, setStep] = useState<'menu' | 'newBand'>('menu');
   const [error, setError] = useState<string | null>(null);
 
   // Bands for “New Event”
@@ -113,14 +112,43 @@ export default function GlobalCreate({
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const CONTENT_PX = 3;
+  const [step, setStep] = useState<'menu' | 'newBand' | 'newEvent'>('menu');
+
+  // New Event form state
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventType, setEventType] = useState<EventType>('show');
+  const [eventStarts, setEventStarts] = useState<string>('');
+  const [eventEnds, setEventEnds] = useState<string>('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [creatingEvent, setCreatingEvent] = useState(false);
+
+  const pathname = usePathname();
 
   // Hook: create band via service (trigger handles admin membership)
   const {
-    createBand,
+    createBand: createBandWithHook, // ← alias to avoid collision
     loading: creatingBand,
     error: createBandError,
-    resetError,
+    resetError: resetCreateBandError, // ← alias resetError
   } = useCreateBand();
+
+  const resetAll = useCallback(() => {
+    setStep('menu');
+    setError(null);
+    resetCreateBandError?.(); // ← use the alias
+
+    setBandName('');
+    setAvatarFile(null);
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(null);
+
+    setEventBand(null);
+    setEventTitle('');
+    setEventType('show');
+    setEventStarts('');
+    setEventEnds('');
+    setEventLocation('');
+  }, [avatarPreview, resetCreateBandError]);
 
   // Load bands when dialog opens
   useEffect(() => {
@@ -150,9 +178,7 @@ export default function GlobalCreate({
           if (rpcErr && rpcErr.code !== '42883') {
             console.warn('[ensure_profile]', rpcErr.message);
           }
-        } catch {
-          /* noop */
-        }
+        } catch {}
 
         const { data: rows, error: mErr } = await sb
           .from('band_members')
@@ -228,10 +254,17 @@ export default function GlobalCreate({
 
   // File pick handler
   function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] || null;
+    const f = e.target.files?.[0] ?? null;
     if (!f) return;
     if (!f.type.startsWith('image/')) return alert('Please choose an image.');
     if (f.size > 3 * 1024 * 1024) return alert('Max size is 3MB.');
+
+    // revoke old preview URL to avoid leaks
+    setAvatarPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return prev;
+    });
+
     setAvatarFile(f);
     setAvatarPreview(URL.createObjectURL(f));
   }
@@ -242,24 +275,13 @@ export default function GlobalCreate({
     if (!name) return;
 
     try {
-      resetError?.();
+      resetCreateBandError?.();
       setError(null);
 
-      const created = await createBand({ name, avatarFile }); // trigger makes creator admin
-      if (!created) {
-        setError(createBandError ?? 'Could not create band');
-        return;
-      }
+      const created = await createBandWithHook({ name, avatarFile });
+      if (!created?.id) throw new Error('Could not create band');
 
-      // Notify parent & local state update
-      onBandCreated?.(created);
-
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('bands:created', { detail: created })
-        );
-      }
-
+      // Optimistic merge for the menu list (optional)
       setBands((prev) =>
         mergeLocalBands(prev, [
           {
@@ -270,27 +292,29 @@ export default function GlobalCreate({
         ])
       );
 
-      await refreshBandsLocal();
+      // Broadcast (optional)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('bands:created', { detail: created })
+        );
+      }
 
-      // Reset UI
-      setBandName('');
-      setAvatarFile(null);
-      setAvatarPreview(null);
-      setStep('menu');
+      // Close and go to the new band
       setOpen(false);
+      router.push(`/bands/${created.id}`);
     } catch (e) {
       console.error('[GlobalCreate:onSubmitCreate]', e);
       setError(errMsg(e) || 'Could not create band');
     }
+    // ✅ only the things actually used in the function
   }, [
     bandName,
     avatarFile,
-    createBand,
-    createBandError,
-    onBandCreated,
-    refreshBandsLocal,
-    resetError,
+    createBandWithHook,
+    resetCreateBandError,
+    setBands,
     setOpen,
+    router,
   ]);
 
   // Optional trigger button (icon/button/none)
@@ -327,6 +351,15 @@ export default function GlobalCreate({
     return null;
   }, [trigger, isMobile, setOpen]);
 
+  const prevPathRef = useRef(pathname);
+  useEffect(() => {
+    if (pathname !== prevPathRef.current) {
+      prevPathRef.current = pathname;
+      // Just reset the wizard state; don't call setOpen(false) here.
+      resetAll();
+    }
+  }, [pathname, resetAll]);
+
   return (
     <>
       {TriggerEl}
@@ -344,7 +377,11 @@ export default function GlobalCreate({
         <DialogTitle sx={{ px: CONTENT_PX, pb: 1.5 }}>
           <Stack direction="row" alignItems="center" gap={1}>
             <Stack sx={{ flex: 1 }}>
-              {step === 'menu' ? 'Create' : 'Create Band'}
+              {step === 'menu'
+                ? 'Create'
+                : step === 'newBand'
+                ? 'Create Band'
+                : 'Create Event'}
             </Stack>
             <IconButton
               aria-label="Close"
@@ -387,54 +424,27 @@ export default function GlobalCreate({
               <Divider sx={{ my: 1 }} />
 
               {/* New Event */}
-              <Stack gap={1}>
-                <Stack direction="row" alignItems="center" gap={1}>
-                  <EventIcon sx={{ opacity: 0.9 }} />
+              <List disablePadding sx={{ borderRadius: 1 }}>
+                <ListItemButton
+                  onClick={() => setStep('newEvent')}
+                  sx={{ px: 0 }}
+                  disabled={!hasBands}
+                >
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <ScheduleIcon sx={{ opacity: 0.9 }} />
+                  </ListItemIcon>
                   <ListItemText
                     primary="New Event"
                     secondary={
                       hasBands
-                        ? 'Choose a band for your gig or practice'
+                        ? 'Create a show or practice'
                         : 'Create a band first'
                     }
-                    primaryTypographyProps={{ fontWeight: 600 }}
                   />
-                </Stack>
-
-                <Autocomplete
-                  disabled={!hasBands}
-                  loading={loadingBands}
-                  value={eventBand}
-                  onChange={(_, v) => setEventBand(v)}
-                  options={bands}
-                  getOptionLabel={(o) => o?.name ?? ''}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Band"
-                      size="small"
-                      fullWidth
-                    />
-                  )}
-                />
-
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    if (!hasBands) return setStep('newBand');
-                    if (eventBand) {
-                      setOpen(false);
-                      router.push(`/bands/${eventBand.id}/events/new`);
-                    }
-                  }}
-                  disabled={hasBands && !eventBand}
-                >
-                  Continue
-                </Button>
-              </Stack>
+                </ListItemButton>
+              </List>
             </Stack>
-          ) : (
-            // step === 'newBand'
+          ) : step === 'newBand' ? (
             <Stack gap={1.5}>
               <TextField
                 autoFocus
@@ -477,7 +487,7 @@ export default function GlobalCreate({
                   variant="outlined"
                   onClick={() => {
                     setError(null);
-                    resetError();
+                    resetCreateBandError();
                     setBandName('');
                     setAvatarFile(null);
                     setAvatarPreview(null);
@@ -496,6 +506,122 @@ export default function GlobalCreate({
                   }
                 >
                   {creatingBand ? 'Creating…' : 'Create Band'}
+                </Button>
+              </Stack>
+            </Stack>
+          ) : (
+            /* step === 'newEvent' */
+            <Stack gap={1.25}>
+              <Autocomplete
+                autoFocus
+                disabled={!hasBands}
+                loading={loadingBands}
+                value={eventBand}
+                onChange={(_, v) => setEventBand(v)}
+                options={bands}
+                getOptionLabel={(o) => o?.name ?? ''}
+                renderInput={(params) => (
+                  <TextField {...params} label="Band" size="small" fullWidth />
+                )}
+              />
+
+              <TextField
+                label="Title"
+                size="small"
+                fullWidth
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                placeholder="e.g., Warehouse Show"
+              />
+
+              <TextField
+                label="Type"
+                size="small"
+                select
+                SelectProps={{ native: true }}
+                value={eventType}
+                onChange={(e) => setEventType(e.target.value as EventType)}
+              >
+                <option value="show">Show</option>
+                <option value="practice">Practice</option>
+              </TextField>
+
+              <TextField
+                label="Starts"
+                type="datetime-local"
+                size="small"
+                value={eventStarts}
+                onChange={(e) => setEventStarts(e.target.value)}
+                helperText="Local time"
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                label="Ends (optional)"
+                type="datetime-local"
+                size="small"
+                value={eventEnds}
+                onChange={(e) => setEventEnds(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                label="Location (optional)"
+                size="small"
+                value={eventLocation}
+                onChange={(e) => setEventLocation(e.target.value)}
+                placeholder="123 Main St"
+              />
+
+              <Stack direction="row" gap={1} sx={{ mt: 0.5 }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setEventTitle('');
+                    setEventType('show');
+                    setEventStarts('');
+                    setEventEnds('');
+                    setEventLocation('');
+                    setStep('menu');
+                  }}
+                >
+                  Back
+                </Button>
+
+                <Button
+                  variant="contained"
+                  disabled={
+                    !eventBand ||
+                    !eventTitle.trim() ||
+                    !eventStarts ||
+                    creatingEvent
+                  }
+                  onClick={async () => {
+                    try {
+                      setCreatingEvent(true);
+                      const starts = new Date(eventStarts);
+                      const ends = eventEnds ? new Date(eventEnds) : null;
+
+                      const id = await createEvent({
+                        bandId: eventBand!.id,
+                        title: eventTitle,
+                        type: eventType,
+                        startsAt: starts,
+                        endsAt: ends,
+                        location: eventLocation || null,
+                      });
+
+                      setOpen(false);
+                      router.push(`/bands/${eventBand!.id}/events/${id}`);
+                    } catch (e: any) {
+                      console.error('[Create Event]', e);
+                      setError(e?.message ?? 'Could not create event');
+                    } finally {
+                      setCreatingEvent(false);
+                    }
+                  }}
+                >
+                  {creatingEvent ? 'Creating…' : 'Create Event'}
                 </Button>
               </Stack>
             </Stack>
