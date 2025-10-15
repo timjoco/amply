@@ -17,7 +17,9 @@ export default async function EventPage({
 
   const { data: event, error } = await supabase
     .from('events')
-    .select('id, band_id, title, type, starts_at, location')
+    .select(
+      `id, band_id, title, type, starts_at, location, band:bands ( id, name )`
+    )
     .eq('id', eventId)
     .maybeSingle();
 

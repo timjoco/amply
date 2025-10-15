@@ -32,7 +32,7 @@ import { useState } from 'react';
 
 type Props = {
   bandId: string;
-  bandName: string;
+  bandName?: string;
   onInvite?: () => void;
   /** Admins see Invite + Settings; members see Leave */
   isAdmin?: boolean;
