@@ -1,7 +1,7 @@
 // app/bands/[id]/settings/page.tsx
 import { createClient } from '@/utils/supabase/server';
 import { notFound, redirect } from 'next/navigation';
-import SettingsDialog from './SettingsDialog';
+import BandSettingsDialog from './BandSettingsDialog';
 
 export default async function BandSettingsPage({
   params,
@@ -37,7 +37,7 @@ export default async function BandSettingsPage({
   const isAdmin = mem.role === 'admin';
 
   return (
-    <SettingsDialog
+    <BandSettingsDialog
       bandId={band.id}
       bandName={band.name}
       avatarPath={band.avatar_url ?? undefined}

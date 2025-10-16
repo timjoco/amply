@@ -1,3 +1,4 @@
+// src/app/settings/SettingsDialog.tsx
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
@@ -63,6 +64,7 @@ export default function SettingsDialog() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // Load current user email
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -117,10 +119,12 @@ export default function SettingsDialog() {
       disableRestoreFocus
       PaperProps={{
         sx: {
+          // Match app background
           backgroundColor: 'background.default',
         },
       }}
     >
+      {/* Glassy header like the rest of the app */}
       <AppBar
         position="relative"
         color="transparent"
@@ -144,10 +148,12 @@ export default function SettingsDialog() {
       </AppBar>
 
       <DialogContent sx={{ p: 0 }}>
+        {/* Page gutter matches dashboard */}
         <Container
           maxWidth="md"
           sx={{ py: { xs: 3, md: 5 }, px: { xs: 2, md: 3 } }}
         >
+          {/* Header row (kept for spacing/structure) */}
           <Stack
             direction="row"
             alignItems="center"
@@ -209,6 +215,7 @@ export default function SettingsDialog() {
             </Stack>
           </Paper>
 
+          {/* Preferences (glass) */}
           <Paper variant="glass">
             <Stack sx={{ p: { xs: 2, md: 3 } }} spacing={1}>
               <Typography variant="h6" fontWeight={700}>
@@ -221,6 +228,7 @@ export default function SettingsDialog() {
             </Stack>
           </Paper>
 
+          {/* Toast */}
           <Snackbar
             open={toast.open}
             autoHideDuration={2000}

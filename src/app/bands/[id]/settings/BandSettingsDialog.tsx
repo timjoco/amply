@@ -32,12 +32,14 @@ type Props = {
   bandId: string;
   bandName: string;
   avatarPath?: string;
+  isAdmin?: boolean;
 };
 
-export default function SettingsDialog({
+export default function BandSettingsDialog({
   bandId,
   bandName,
   avatarPath,
+  isAdmin,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
@@ -61,8 +63,8 @@ export default function SettingsDialog({
   const BORDER = 'rgba(255,255,255,0.10)';
   const TEXT = 'rgba(255,255,255,0.96)';
   const TEXT_DIM = 'rgba(255,255,255,0.72)';
-  const ROW_Y = 2; // vertical padding multiplier per row
-  const GAP_Y = 2; // spacing between stacked elements
+  const ROW_Y = 2;
+  const GAP_Y = 2;
 
   const sections = [
     { id: 'profile', label: 'Band Profile' },
@@ -91,7 +93,6 @@ export default function SettingsDialog({
         sx: { bgcolor: BG, color: 'common.white' },
       }}
     >
-      {/* Floating close (X) */}
       <Box
         sx={{
           position: 'fixed',
@@ -125,7 +126,6 @@ export default function SettingsDialog({
           minHeight: '100%',
         }}
       >
-        {/* Left rail */}
         <Box
           sx={{
             display: { xs: 'none', md: 'block' },
@@ -176,7 +176,6 @@ export default function SettingsDialog({
           </Stack>
         </Box>
 
-        {/* Right content pane (uniform rows on a flat surface) */}
         <Box
           ref={scrollRef}
           sx={{
@@ -193,7 +192,6 @@ export default function SettingsDialog({
               backgroundClip: 'padding-box',
             },
 
-            // Neutralize any Card styles used inside children
             '& .MuiCard-root': {
               background: 'transparent',
               boxShadow: 'none',
@@ -274,11 +272,22 @@ export default function SettingsDialog({
             </Typography>
 
             <Typography variant="body2" sx={{ color: TEXT_DIM, mb: 1.5 }}>
-              Leave or delete the band. Deleting is permanent.
+              {isAdmin
+                ? 'Leave or delete the band. Deleting is permanent.'
+                : 'Leave the band.'}
             </Typography>
 
             <Stack spacing={GAP_Y}>
-              <DangerZone bandId={bandId} bandName={bandName} />
+              {isAdmin ? (
+                <DangerZone bandId={bandId} bandName={bandName} />
+              ) : (
+                // e.g. a leave-only variant, or pass a flag down:
+                <DangerZone
+                  bandId={bandId}
+                  bandName={bandName}
+                  canDelete={false}
+                />
+              )}
             </Stack>
           </Box>
 

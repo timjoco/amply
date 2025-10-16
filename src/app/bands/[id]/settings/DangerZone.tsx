@@ -23,6 +23,7 @@ export default function DangerZone({
 }: {
   bandId: string;
   bandName: string;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const supabase = supabaseBrowser(); // ✅ reuse your browser client

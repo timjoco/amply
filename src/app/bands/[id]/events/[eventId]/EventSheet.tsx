@@ -15,7 +15,6 @@ import {
   Chip,
   CircularProgress,
   Divider,
-  Grid,
   IconButton,
   List,
   ListItem,
@@ -31,6 +30,7 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
+import Grid from '@mui/material/Grid'; // ✅ Grid v2
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   useCallback,
@@ -48,140 +48,10 @@ type EventRow = {
   type: 'show' | 'practice';
   starts_at: string;
   location: string | null;
-  // NEW:
-  is_booked?: boolean; // computed in view
-  cnt_members?: number; // optional debug/UX
-  cnt_accepted?: number; // optional debug/UX
+  is_booked?: boolean;
+  cnt_members?: number;
+  cnt_accepted?: number;
 };
-
-// function AttendanceBar({ eventId }: { eventId: string }) {
-//   const sb = useMemo(() => supabaseBrowser(), []);
-//   const [mine, setMine] = useState<
-//     'pending' | 'accepted' | 'declined' | 'tentative'
-//   >('pending');
-//   const [counts, setCounts] = useState<{ accepted: number; total: number }>({
-//     accepted: 0,
-//     total: 0,
-//   });
-//   const [saving, setSaving] = useState(false);
-
-//   const load = useCallback(async () => {
-//     // current user’s row
-//     const { data: meRow } = await sb
-//       .from('event_attendance')
-//       .select('status')
-//       .eq('event_id', eventId)
-//       .limit(1);
-//     if (meRow?.[0]?.status) setMine(meRow[0].status as typeof mine);
-
-//     // counts
-//     const { data: agg } = await sb
-//       .rpc('event_attendance_counts', { p_event_id: eventId }) // OPTIONAL RPC (see below)
-//       .match(() => null as any);
-
-//     if (
-//       agg &&
-//       typeof agg.accepted === 'number' &&
-//       typeof agg.total === 'number'
-//     ) {
-//       setCounts({ accepted: agg.accepted, total: agg.total });
-//     } else {
-//       // fallback if you didn’t add the helper RPC
-//       const { data: all } = await sb
-//         .from('event_attendance')
-//         .select('status')
-//         .eq('event_id', eventId);
-//       const total = all?.length ?? 0;
-//       const accepted = (all ?? []).filter(
-//         (r) => r.status === 'accepted'
-//       ).length;
-//       setCounts({ accepted, total });
-//     }
-//   }, [sb, eventId]);
-
-//   useEffect(() => {
-//     load();
-//     const ch = sb
-//       .channel(`event:${eventId}:attendance`)
-//       .on(
-//         'postgres_changes',
-//         {
-//           event: '*',
-//           schema: 'public',
-//           table: 'event_attendance',
-//           filter: `event_id=eq.${eventId}`,
-//         },
-//         () => load()
-//       )
-//       .subscribe();
-//     return () => {
-//       sb.removeChannel(ch);
-//     };
-//   }, [sb, eventId, load]);
-
-//   const update = async (next: typeof mine) => {
-//     try {
-//       setSaving(true);
-//       const {
-//         data: { user },
-//       } = await sb.auth.getUser();
-//       if (!user) return;
-
-//       await sb.from('event_attendance').upsert({
-//         event_id: eventId,
-//         user_id: user.id,
-//         status: next,
-//         responded_at: new Date().toISOString(),
-//       });
-//       setMine(next);
-//       load();
-//     } finally {
-//       setSaving(false);
-//     }
-//   };
-
-//   return (
-//     <Stack
-//       direction="row"
-//       alignItems="center"
-//       spacing={1}
-//       sx={{
-//         py: 1,
-//         borderBottom: '1px solid rgba(255,255,255,0.08)',
-//         mb: 1.5,
-//       }}
-//     >
-//       <Typography variant="body2" sx={{ opacity: 0.85 }}>
-//         Attendance: {counts.accepted}/{counts.total} accepted
-//       </Typography>
-//       <Box sx={{ flex: 1 }} />
-//       <Button
-//         size="small"
-//         variant={mine === 'accepted' ? 'contained' : 'outlined'}
-//         onClick={() => update('accepted')}
-//         disabled={saving}
-//       >
-//         Accept
-//       </Button>
-//       <Button
-//         size="small"
-//         variant={mine === 'tentative' ? 'contained' : 'outlined'}
-//         onClick={() => update('tentative')}
-//         disabled={saving}
-//       >
-//         Tentative
-//       </Button>
-//       <Button
-//         size="small"
-//         variant={mine === 'declined' ? 'contained' : 'outlined'}
-//         onClick={() => update('declined')}
-//         disabled={saving}
-//       >
-//         Decline
-//       </Button>
-//     </Stack>
-//   );
-// }
 
 function RosterPanel({ bandId, eventId }: { bandId: string; eventId: string }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -195,10 +65,8 @@ function RosterPanel({ bandId, eventId }: { bandId: string; eventId: string }) {
   >([]);
 
   const load = useCallback(async () => {
-    // Pull band members and left-join their attendance for this event
-    // Adjust table/column names to your schema.
     const { data, error } = await sb
-      .from('band_members_view') // <-- see note below if you don't have a view
+      .from('band_members_view')
       .select(
         `
         user_id,
@@ -208,7 +76,7 @@ function RosterPanel({ bandId, eventId }: { bandId: string; eventId: string }) {
       `
       )
       .eq('band_id', bandId)
-      .eq('attendance.event_id', eventId); // left join still returns nulls
+      .eq('attendance.event_id', eventId);
 
     if (!error) {
       const mapped =
@@ -335,7 +203,6 @@ export default function EventSheet({
   const startsAtLabel = useMemo(() => {
     try {
       const d = new Date(initialEvent.starts_at);
-      // Force a specific locale + timeZone for identical SSR/CSR output
       return new Intl.DateTimeFormat('en-US', {
         dateStyle: 'medium',
         timeStyle: 'short',
@@ -371,14 +238,7 @@ export default function EventSheet({
     <Box sx={{ minHeight: '100dvh', bgcolor: '#0B0A10', color: 'white' }}>
       <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 1.5, md: 2 } }}>
         {/* Header */}
-        <Box
-          sx={{
-            flex: '1 1 auto',
-            minWidth: 0,
-            mb: 1.5,
-          }}
-        >
-          {/* TOP ROW Event title + status chip */}
+        <Box sx={{ flex: '1 1 auto', minWidth: 0, mb: 1.5 }}>
           <Stack
             direction="row"
             alignItems="center"
@@ -403,7 +263,7 @@ export default function EventSheet({
             )}
           </Stack>
 
-          {/* Subtitle: type • starts at • location */}
+          {/* Subtitle */}
           <Typography
             variant="body2"
             sx={{ opacity: 0.72, mt: 0.25 }}
@@ -413,13 +273,6 @@ export default function EventSheet({
             {initialEvent.location ? ` · ${initialEvent.location}` : ''}
           </Typography>
         </Box>
-        <Box
-          sx={{
-            display: { xs: 'flex', md: 'none' },
-            justifyContent: 'flex-end',
-            mb: 1,
-          }}
-        ></Box>
 
         {/* Tabs */}
         <Tabs
@@ -447,14 +300,12 @@ export default function EventSheet({
               columnSpacing={2}
               sx={{ mt: 0.5, alignItems: 'flex-start' }}
             >
-              <Grid size={8} sx={{ minHeight: 0 }}>
-                {' '}
-                {/* <-- add this */}
+              <Grid size={{ xs: 12, md: 8 }} sx={{ minHeight: 0 }}>
                 <ChatTab eventId={eventId} />
               </Grid>
 
               <Grid
-                size={4}
+                size={{ xs: 12, md: 4 }}
                 sx={{ borderLeft: '1px solid', borderColor: 'divider', pl: 2 }}
               >
                 <Stack gap={1.5} sx={{ position: 'sticky', top: 88 }}>
@@ -467,7 +318,7 @@ export default function EventSheet({
             <>
               <ChatTab eventId={eventId} />
 
-              {/* Edge Puller (flush to right; hidden when open) */}
+              {/* Edge Puller */}
               <Box
                 role="button"
                 aria-label="Open roster"
@@ -476,17 +327,16 @@ export default function EventSheet({
                 sx={(t) => ({
                   position: 'fixed',
                   top: '50%',
-                  right: 0, // flush to the right edge
+                  right: 0,
                   transform: 'translateY(-50%)',
                   zIndex: t.zIndex.drawer + 1,
-                  width: 16, // slim puller
+                  width: 16,
                   height: 72,
                   borderTopLeftRadius: 10,
                   borderBottomLeftRadius: 10,
                   bgcolor: 'rgba(255,255,255,0.12)',
-                  // no border so there’s no 1px line "gap"
                   boxShadow: '0 0 0 1px rgba(255,255,255,0.08) inset',
-                  display: { xs: rosterOpen ? 'none' : 'flex', md: 'none' }, // hide when open
+                  display: { xs: rosterOpen ? 'none' : 'flex', md: 'none' },
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
@@ -507,18 +357,17 @@ export default function EventSheet({
                 onOpen={() => setRosterOpen(true)}
                 onClose={() => setRosterOpen(false)}
                 disableSwipeToOpen={false}
-                swipeAreaWidth={16} // invisible edge hot-zone; flush to edge
+                swipeAreaWidth={16}
                 PaperProps={{
                   sx: {
                     width: '90vw',
                     maxWidth: 420,
                     p: 1.5,
-                    right: 0, // ensure flush
-                    margin: 0, // no margin gap
-                    borderLeft: '1px solid', // optional divider line
+                    right: 0,
+                    margin: 0,
+                    borderLeft: '1px solid',
                     borderColor: 'divider',
                     position: 'fixed',
-                    // left-edge grab handle *inside* the drawer; aligned to edge (no -1px)
                     '&::before': {
                       content: '""',
                       position: 'absolute',
@@ -557,7 +406,7 @@ export default function EventSheet({
   );
 }
 
-/* ---------- Chat (re-using your minimal EventClient logic) ---------- */
+/* ---------- Chat ---------- */
 function ChatTab({ eventId }: { eventId: string }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<any[]>([]);
@@ -567,15 +416,15 @@ function ChatTab({ eventId }: { eventId: string }) {
 
   const HEADER_OFFSET_XS = 148;
   const HEADER_OFFSET_MD = 192;
-  const COMPOSER_LIFT = 24;
+  const COMPOSER_LIFT = 15;
 
   const composerRef = useRef<HTMLDivElement | null>(null);
-  const [composerH, setComposerH] = useState(72); // default guess
+  const [composerH, setComposerH] = useState(60);
 
   useLayoutEffect(() => {
     const measure = () => {
       if (composerRef.current)
-        setComposerH(composerRef.current.offsetHeight || 72);
+        setComposerH(composerRef.current.offsetHeight || 60);
     };
     measure();
     window.addEventListener('resize', measure);
@@ -782,7 +631,6 @@ function SetlistTab({ eventId }: { eventId: string }) {
           filter: `event_id=eq.${eventId}`,
         },
         () => {
-          // refresh on any change
           sb.from('event_setlist_items')
             .select('id, title, position, notes, created_at')
             .eq('event_id', eventId)
@@ -814,7 +662,6 @@ function SetlistTab({ eventId }: { eventId: string }) {
       if (idx < 0 || swapIdx < 0 || swapIdx >= items.length) return;
       const a = items[idx],
         b = items[swapIdx];
-      // simple swap of positions
       await sb
         .from('event_setlist_items')
         .update({ position: b.position })
