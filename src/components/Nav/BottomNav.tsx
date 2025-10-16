@@ -37,7 +37,7 @@ export default function BottomNav() {
   }, []);
 
   useEffect(() => {
-    if (!pathname?.startsWith('/settings')) setManualIndex(null);
+    if (!pathname?.startsWith('/profiles/settings')) setManualIndex(null);
   }, [pathname]);
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function BottomNav() {
 
   const selectedIndex = mounted
     ? manualIndex ??
-      (pathname?.startsWith('/settings') ? ACCOUNT_INDEX : HOME_INDEX)
+      (pathname?.startsWith('/profiles/settings') ? ACCOUNT_INDEX : HOME_INDEX)
     : HOME_INDEX;
 
   if (!mounted) return null;
@@ -99,7 +99,8 @@ export default function BottomNav() {
             window.dispatchEvent(new CustomEvent('global-create:open'));
             return;
           }
-          const href = newValue === ACCOUNT_INDEX ? '/settings' : '/dashboard';
+          const href =
+            newValue === ACCOUNT_INDEX ? '/profiles/settings' : '/dashboard';
           router.push(href);
         }}
         showLabels
