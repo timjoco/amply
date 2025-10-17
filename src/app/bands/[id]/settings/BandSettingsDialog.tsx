@@ -21,6 +21,9 @@ import BandAvatarCard from './BandAvatarCard';
 import BandBasicsCard from './BandBasicsCard';
 import DangerZone from './DangerZone';
 
+const blurActive = () =>
+  (document.activeElement as HTMLElement | null)?.blur?.();
+
 const Transition = forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement<any, any> },
   ref
@@ -45,8 +48,9 @@ export default function BandSettingsDialog({
   const [open, setOpen] = useState(true);
 
   const handleClose = () => {
+    // ensure no focused descendant remains when dialog starts closing
+    blurActive();
     setOpen(false);
-    setTimeout(() => router.push(`/bands/${bandId}`), 230);
   };
 
   useEffect(() => {
@@ -84,8 +88,19 @@ export default function BandSettingsDialog({
       open={open}
       onClose={handleClose}
       TransitionComponent={Transition}
+      TransitionProps={{
+        onExit: blurActive, // blur again at transition start
+        onExited: () => {
+          // navigate only after unmount to avoid aria-hidden focus traps
+          router.push(`/bands/${bandId}`);
+        },
+      }}
       fullScreen
-      keepMounted
+      // IMPORTANT: unmount when closed to avoid aria-hidden warnings
+      // (was keepMounted)
+      disableRestoreFocus
+      disableAutoFocus
+      disableEnforceFocus
       BackdropProps={{
         sx: { backdropFilter: 'blur(2px)', backgroundColor: 'rgba(0,0,0,0.7)' },
       }}
@@ -93,6 +108,7 @@ export default function BandSettingsDialog({
         sx: { bgcolor: BG, color: 'common.white' },
       }}
     >
+      {/* Floating close (X) */}
       <Box
         sx={{
           position: 'fixed',
@@ -108,6 +124,7 @@ export default function BandSettingsDialog({
         <IconButton
           aria-label="Close"
           onClick={handleClose}
+          autoFocus={false}
           sx={{
             color: TEXT,
             bgcolor: 'rgba(255,255,255,0.06)',
@@ -126,6 +143,7 @@ export default function BandSettingsDialog({
           minHeight: '100%',
         }}
       >
+        {/* Left rail */}
         <Box
           sx={{
             display: { xs: 'none', md: 'block' },
@@ -176,6 +194,7 @@ export default function BandSettingsDialog({
           </Stack>
         </Box>
 
+        {/* Right content pane */}
         <Box
           ref={scrollRef}
           sx={{
@@ -200,7 +219,6 @@ export default function BandSettingsDialog({
             '& .MuiCardHeader-root': { px: 0 },
             '& .MuiCardContent-root': { px: 0 },
 
-            // Make form inputs, labels, and buttons look consistent
             '& .MuiFormLabel-root': { color: TEXT_DIM },
             '& .MuiInputBase-root': {
               color: TEXT,
@@ -278,16 +296,11 @@ export default function BandSettingsDialog({
             </Typography>
 
             <Stack spacing={GAP_Y}>
-              {isAdmin ? (
-                <DangerZone bandId={bandId} bandName={bandName} />
-              ) : (
-                // e.g. a leave-only variant, or pass a flag down:
-                <DangerZone
-                  bandId={bandId}
-                  bandName={bandName}
-                  canDelete={false}
-                />
-              )}
+              <DangerZone
+                bandId={bandId}
+                bandName={bandName}
+                canDelete={!!isAdmin}
+              />
             </Stack>
           </Box>
 
