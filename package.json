@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "play": "tsx playground/*.ts"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -23,11 +24,13 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@types/node": "^20",
+    "@types/node": "^20.19.21",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
-    "typescript": "^5"
+    "tsx": "^4.20.6",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }
