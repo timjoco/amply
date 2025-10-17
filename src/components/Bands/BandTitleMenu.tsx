@@ -134,31 +134,6 @@ export default function BandTitleMenu({
           <ChevronRightIcon sx={{ fontSize: 22, flex: '0 0 auto' }} />
         </ButtonBase>
 
-        <Box
-          role="button"
-          aria-label="Open band actions"
-          title="Open band actions"
-          onClick={() => setSheetOpen(true)}
-          sx={{
-            position: 'fixed',
-            right: 12,
-            bottom: `calc(56px + env(safe-area-inset-bottom, 0px) + 8px)`,
-            zIndex: 3,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.75,
-            px: 1,
-            py: 0.5,
-            height: 36,
-            borderRadius: 999,
-            bgcolor: 'rgba(255,255,255,0.10)',
-            color: 'rgba(255,255,255,0.96)',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            userSelect: 'none',
-          }}
-        ></Box>
-
         <SwipeableDrawer
           anchor="bottom"
           open={sheetOpen}

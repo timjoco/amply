@@ -158,7 +158,11 @@ export default function AccountMenu({
             <ListItemText primary="Dashboard" />
           </MenuItem>
         )}
-        <MenuItem component={Link} href="/settings" onClick={closeMenu}>
+        <MenuItem
+          component={Link}
+          href="/profiles/settings"
+          onClick={closeMenu}
+        >
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
