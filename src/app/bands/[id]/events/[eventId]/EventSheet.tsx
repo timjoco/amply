@@ -2,19 +2,13 @@
 'use client';
 
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import AddIcon from '@mui/icons-material/Add';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SendIcon from '@mui/icons-material/Send';
 
 import {
-  Avatar,
   Box,
   Button,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
   List,
   ListItem,
@@ -30,7 +24,7 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
-import Grid from '@mui/material/Grid'; // ✅ Grid v2
+import Grid from '@mui/material/Grid';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   useCallback,
@@ -53,49 +47,243 @@ type EventRow = {
   cnt_accepted?: number;
 };
 
+type AttStatus = 'accepted' | 'tentative' | 'declined' | 'pending';
+
+function useAttendance(eventId: string) {
+  const sb = useMemo(() => supabaseBrowser(), []);
+  const [mine, setMine] = useState<AttStatus>('pending');
+  const [counts, setCounts] = useState<{ accepted: number; total: number }>({
+    accepted: 0,
+    total: 0,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+
+    // my status
+    const { data: me, error: meErr } = await sb
+      .from('event_attendance')
+      .select('status')
+      .eq('event_id', eventId)
+      .limit(1);
+    if (!meErr && me?.[0]?.status) setMine(me[0].status as AttStatus);
+    if (meErr) setError(meErr.message);
+
+    // counts
+    const { data: all, error: cErr } = await sb
+      .from('event_attendance')
+      .select('status')
+      .eq('event_id', eventId);
+    if (!cErr) {
+      const total = all?.length ?? 0;
+      const accepted = (all ?? []).filter(
+        (r) => r.status === 'accepted'
+      ).length;
+      setCounts({ accepted, total });
+    } else {
+      setError(cErr.message);
+    }
+  }, [sb, eventId]);
+
+  useEffect(() => {
+    load();
+    const ch = sb
+      .channel(`event:${eventId}:attendance`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_attendance',
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => load()
+      )
+      .subscribe();
+    return () => {
+      sb.removeChannel(ch);
+    };
+  }, [sb, eventId, load]);
+
+  const update = useCallback(
+    async (next: AttStatus) => {
+      if (next === 'pending' || next === mine) return; // no-op
+      setSaving(true);
+      setError(null);
+
+      // snapshot for rollback
+      const prevMine = mine;
+      const prevCounts = counts;
+
+      // optimistic counts: only the accepted tally changes
+      const applyCounts = (from: AttStatus, to: AttStatus) => {
+        let accepted = counts.accepted;
+        if (from === 'accepted') accepted -= 1;
+        if (to === 'accepted') accepted += 1;
+        setCounts({ accepted, total: counts.total }); // total unchanged
+      };
+
+      // optimistic UI
+      setMine(next);
+      applyCounts(prevMine, next);
+
+      try {
+        const {
+          data: { user },
+        } = await sb.auth.getUser();
+        if (!user) throw new Error('Sign in to respond');
+
+        const { error: upErr } = await sb.from('event_attendance').upsert(
+          {
+            event_id: eventId,
+            status: next,
+            responded_at: new Date().toISOString(),
+            // let DEFAULT auth.uid() set user_id
+          },
+          { onConflict: 'event_id,user_id' }
+        );
+
+        if (upErr) throw upErr;
+        // success: realtime will eventually refresh counts/roster too
+      } catch (e: any) {
+        // rollback optimistic UI
+        setMine(prevMine);
+        setCounts(prevCounts);
+
+        const msg = /row[- ]level security|RLS|42501/i.test(e?.message)
+          ? "You don't have permission to respond for this event."
+          : e?.message ?? 'Failed to update attendance.';
+        setError(msg);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [sb, eventId, mine, counts]
+  );
+
+  return { mine, counts, saving, error, update };
+}
+
+function AttendanceBar({ eventId }: { eventId: string }) {
+  const { mine, counts, saving, error, update } = useAttendance(eventId);
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+      sx={{
+        py: 1,
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        mb: 1.5,
+        flexWrap: 'wrap',
+        gap: 1,
+      }}
+    >
+      <Typography variant="body2" sx={{ opacity: 0.85 }}>
+        Attendance: {counts.accepted}/{counts.total} accepted
+      </Typography>
+      <Box sx={{ flex: 1 }} />
+      <Button
+        size="small"
+        variant={mine === 'accepted' ? 'contained' : 'outlined'}
+        onClick={() => update('accepted')}
+        disabled={saving}
+      >
+        Accept
+      </Button>
+      <Button
+        size="small"
+        variant={mine === 'tentative' ? 'contained' : 'outlined'}
+        onClick={() => update('tentative')}
+        disabled={saving}
+      >
+        Tentative
+      </Button>
+      <Button
+        size="small"
+        variant={mine === 'declined' ? 'contained' : 'outlined'}
+        onClick={() => update('declined')}
+        disabled={saving}
+      >
+        Decline
+      </Button>
+      {error && (
+        <Typography variant="caption" color="warning.main" sx={{ ml: 1 }}>
+          {error}
+        </Typography>
+      )}
+    </Stack>
+  );
+}
 function RosterPanel({ bandId, eventId }: { bandId: string; eventId: string }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const [rows, setRows] = useState<
     {
       user_id: string;
       name: string;
-      avatar_url: string | null;
       status: 'accepted' | 'declined' | 'tentative' | 'pending';
     }[]
   >([]);
 
   const load = useCallback(async () => {
-    const { data, error } = await sb
-      .from('band_members_view')
-      .select(
-        `
-        user_id,
-        name,
-        avatar_url,
-        attendance:event_attendance(status)
-      `
-      )
-      .eq('band_id', bandId)
-      .eq('attendance.event_id', eventId);
+    // 1) Band members → user_id list
+    const { data: members, error: mErr } = await sb
+      .from('band_members')
+      .select('user_id')
+      .eq('band_id', bandId);
 
-    if (!error) {
-      const mapped =
-        (data ?? []).map((r: any) => ({
-          user_id: r.user_id,
-          name: r.name ?? 'Member',
-          avatar_url: r.avatar_url ?? null,
-          status: (r.attendance?.[0]?.status ?? 'pending') as
-            | 'accepted'
-            | 'declined'
-            | 'tentative'
-            | 'pending',
-        })) ?? [];
-      setRows(mapped);
+    if (mErr) return; // optionally set error UI
+
+    const ids = (members ?? []).map((m: any) => m.user_id);
+    if (ids.length === 0) {
+      setRows([]);
+      return;
     }
+
+    // 2) Profiles for those users
+    const { data: profiles, error: pErr } = await sb
+      .from('profiles')
+      .select('id, display_name, first_name')
+      .in('id', ids);
+
+    if (pErr) return;
+
+    // 3) Attendance for this event
+    const { data: att, error: aErr } = await sb
+      .from('event_attendance')
+      .select('user_id, status')
+      .eq('event_id', eventId);
+
+    if (aErr) return;
+
+    const statusByUser = new Map<
+      string,
+      'accepted' | 'declined' | 'tentative' | 'pending'
+    >((att ?? []).map((a: any) => [a.user_id, a.status]));
+
+    // 4) Merge
+    const merged =
+      (profiles ?? []).map((p: any) => ({
+        user_id: p.id,
+        name: p.display_name ?? p.first_name ?? 'Member',
+        status: statusByUser.get(p.id) ?? 'pending',
+      })) ?? [];
+
+    // Optional: keep original band_members order
+    const orderIndex = new Map(ids.map((id, i) => [id, i]));
+    merged.sort(
+      (a, b) => orderIndex.get(a.user_id)! - orderIndex.get(b.user_id)!
+    );
+
+    setRows(merged);
   }, [sb, bandId, eventId]);
 
   useEffect(() => {
     load();
+    // Realtime: update when attendance rows change for this event
     const ch = sb
       .channel(`event:${eventId}:attendance-roster`)
       .on(
@@ -144,9 +332,9 @@ function RosterPanel({ bandId, eventId }: { bandId: string; eventId: string }) {
         {rows.map((r) => (
           <ListItem key={r.user_id} sx={{ px: 1 }}>
             <ListItemAvatar>
-              <Avatar src={r.avatar_url ?? undefined}>
+              {/* <Avatar src={r.avatar_url ?? undefined}>
                 {r.name?.slice(0, 1).toUpperCase()}
-              </Avatar>
+              </Avatar> */}
             </ListItemAvatar>
             <ListItemText
               primary={
@@ -194,11 +382,21 @@ export default function EventSheet({
   const [, setError] = useState<string | null>(null);
   const sb = useMemo(() => supabaseBrowser(), []);
   const [rosterOpen, setRosterOpen] = useState(false);
-  const theme = useTheme();
-  const mdUp = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
   const [tab, setTab] = useState<'chat' | 'setlist' | 'notes' | 'files'>(
     'chat'
   );
+
+  // top of EventSheet()
+  const theme = useTheme();
+
+  // Always call the hook (fixed order). It's OK if we don't use the value yet.
+  const mdUp = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Only *use* the media query after mount so SSR and first client paint match
+  const showDesktop = mounted && mdUp;
 
   const startsAtLabel = useMemo(() => {
     try {
@@ -235,8 +433,20 @@ export default function EventSheet({
   }, [bandId, sb]);
 
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: '#0B0A10', color: 'white' }}>
-      <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 1.5, md: 2 } }}>
+    <Box
+      sx={{
+        minHeight: '100dvh',
+        bgcolor: '#0B0A10',
+        color: 'white',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* HEADER (natural height, no scrolling) */}
+      <Box
+        component="header"
+        sx={{ px: { xs: 2, md: 3 }, py: { xs: 1.5, md: 2 } }}
+      >
         {/* Header */}
         <Box sx={{ flex: '1 1 auto', minWidth: 0, mb: 1.5 }}>
           <Stack
@@ -272,9 +482,11 @@ export default function EventSheet({
             {initialEvent.type} · {startsAtLabel}
             {initialEvent.location ? ` · ${initialEvent.location}` : ''}
           </Typography>
+
+          <AttendanceBar eventId={eventId} />
         </Box>
 
-        {/* Tabs */}
+        {/* Tabs (still in header) */}
         <Tabs
           value={tab}
           onChange={(_e, v) => setTab(v)}
@@ -282,7 +494,7 @@ export default function EventSheet({
           indicatorColor="primary"
           sx={{
             mt: 1,
-            mb: 2,
+            mb: 0, // tighter since content below has own spacing
             borderBottom: '1px solid rgba(255,255,255,0.08)',
           }}
         >
@@ -291,14 +503,26 @@ export default function EventSheet({
           <Tab label="Notes" value="notes" />
           <Tab label="Files" value="files" />
         </Tabs>
+      </Box>
 
+      {/* MAIN (fills remaining viewport; hosts internal scroll only) */}
+      <Box
+        component="main"
+        sx={{
+          flex: 1,
+          minHeight: 0, // 👈 critical for nested flex scroll
+          px: { xs: 2, md: 3 },
+          py: { xs: 1.5, md: 2 },
+          overflow: 'hidden', // the children manage their own scroll
+        }}
+      >
         {tab === 'chat' &&
-          (mdUp ? (
-            // --- DESKTOP/TABLET (md+): chat left, roster right ---
+          (showDesktop ? (
+            // DESKTOP
             <Grid
               container
               columnSpacing={2}
-              sx={{ mt: 0.5, alignItems: 'flex-start' }}
+              sx={{ alignItems: 'stretch', height: '100%' }}
             >
               <Grid size={{ xs: 12, md: 8 }} sx={{ minHeight: 0 }}>
                 <ChatTab eventId={eventId} />
@@ -306,15 +530,26 @@ export default function EventSheet({
 
               <Grid
                 size={{ xs: 12, md: 4 }}
-                sx={{ borderLeft: '1px solid', borderColor: 'divider', pl: 2 }}
+                sx={{
+                  borderLeft: { md: '1px solid', xs: 'none' },
+                  borderColor: 'divider',
+                  pl: { md: 2, xs: 0 },
+                  minHeight: 0,
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
               >
-                <Stack gap={1.5} sx={{ position: 'sticky', top: 88 }}>
+                <Stack
+                  gap={1.5}
+                  sx={{ position: { md: 'sticky' as const }, top: { md: 88 } }}
+                >
                   <RosterPanel bandId={bandId} eventId={eventId} />
                 </Stack>
               </Grid>
             </Grid>
           ) : (
-            // --- MOBILE (sm/xs): chat + swipeable roster ---
+            // MOBILE
             <>
               <ChatTab eventId={eventId} />
 
@@ -398,39 +633,56 @@ export default function EventSheet({
             </>
           ))}
 
-        {tab === 'setlist' && <SetlistTab eventId={eventId} />}
+        {/* {tab === 'setlist' && <SetlistTab eventId={eventId} />}
         {tab === 'notes' && <NotesTab eventId={eventId} />}
-        {tab === 'files' && <FilesTab eventId={eventId} />}
+        {tab === 'files' && <FilesTab eventId={eventId} />} */}
       </Box>
     </Box>
   );
 }
 
-/* ---------- Chat ---------- */
 function ChatTab({ eventId }: { eventId: string }) {
+  const theme = useTheme();
+  const mdUp = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
+
   const sb = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const HEADER_OFFSET_XS = 148;
-  const HEADER_OFFSET_MD = 192;
-  const COMPOSER_LIFT = 15;
-
+  // — Composer measurement —
   const composerRef = useRef<HTMLDivElement | null>(null);
-  const [composerH, setComposerH] = useState(60);
+  const [composerH, setComposerH] = useState(72);
+  const BOTTOM_NAV_H = mdUp ? 0 : 56; // adjust if your BottomNavigation differs
+
+  const timeFmt = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'America/Chicago',
+        hour12: true,
+      }),
+    []
+  );
 
   useLayoutEffect(() => {
     const measure = () => {
       if (composerRef.current)
-        setComposerH(composerRef.current.offsetHeight || 60);
+        setComposerH(composerRef.current.offsetHeight || 72);
     };
     measure();
+    const obs = new ResizeObserver(measure);
+    if (composerRef.current) obs.observe(composerRef.current);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, []);
 
+  // — Initial load —
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -444,9 +696,8 @@ function ChatTab({ eventId }: { eventId: string }) {
       if (!alive) return;
       setMessages(data ?? []);
       setLoading(false);
-      setTimeout(
-        () => bottomRef.current?.scrollIntoView({ behavior: 'auto' }),
-        0
+      queueMicrotask(() =>
+        bottomRef.current?.scrollIntoView({ behavior: 'auto' })
       );
     })();
     return () => {
@@ -454,6 +705,7 @@ function ChatTab({ eventId }: { eventId: string }) {
     };
   }, [sb, eventId]);
 
+  // — Realtime inserts —
   useEffect(() => {
     const ch = sb
       .channel(`event:${eventId}`)
@@ -490,31 +742,29 @@ function ChatTab({ eventId }: { eventId: string }) {
     const { error } = await sb
       .from('event_messages')
       .insert({ event_id: eventId, user_id: user.id, body });
-    if (error) setInput(body);
+    if (error) setInput(body); // naive retry UX
   }, [input, eventId, sb]);
 
   return (
     <Box
       sx={{
+        height: '100%', // fills EventSheet main area
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: {
-          xs: `calc(100dvh - ${HEADER_OFFSET_XS}px)`,
-          md: `calc(100dvh - ${HEADER_OFFSET_MD}px)`,
-        },
-        minHeight: 0,
-        overflow: 'hidden',
+        overflow: 'hidden', // internal scroll only
       }}
     >
-      {/* Messages scroll area */}
+      {/* Scroll area for messages */}
       <Box
         sx={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           py: 2,
           pr: 0.5,
-          pb: `${composerH + 8}px`,
-          scrollPaddingBottom: `${composerH + 8}px`,
+          pb: `calc(${composerH}px + ${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px) + 8px)`,
+          scrollPaddingBottom: `calc(${composerH}px + ${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px) + 8px)`,
         }}
       >
         {loading ? (
@@ -544,8 +794,12 @@ function ChatTab({ eventId }: { eventId: string }) {
                   {String(m.user_id).slice(0, 2).toUpperCase()}
                 </Box>
                 <Stack sx={{ minWidth: 0 }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                    {new Date(m.created_at).toLocaleTimeString()}
+                  <Typography
+                    variant="caption"
+                    sx={{ opacity: 0.7 }}
+                    suppressHydrationWarning
+                  >
+                    {timeFmt.format(new Date(m.created_at))}
                   </Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                     {m.body}
@@ -558,355 +812,358 @@ function ChatTab({ eventId }: { eventId: string }) {
         )}
       </Box>
 
-      {/* Composer pinned at the bottom (measured) */}
+      {/* Fixed composer above BottomNav */}
       <Box
         ref={composerRef}
         sx={{
-          pt: 1,
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px))`,
+          zIndex: (t) => t.zIndex.appBar + 1,
+          bgcolor: 'rgba(11,10,16,0.98)',
           borderTop: '1px solid rgba(255,255,255,0.08)',
-          pb: `${composerH + 8 + COMPOSER_LIFT}px`,
-          scrollPaddingBottom: `${composerH + 8 + COMPOSER_LIFT}px`,
-          position: 'relative',
-          mb: `${COMPOSER_LIFT}px`,
         }}
       >
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Message the band…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            InputProps={{ sx: { bgcolor: '#11131a', color: 'white' } }}
-          />
-          <IconButton color="primary" onClick={send} aria-label="Send">
-            <SendIcon />
-          </IconButton>
+        <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, md: 3 }, py: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Message the band…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              InputProps={{ sx: { bgcolor: '#11131a', color: 'white' } }}
+            />
+            <IconButton color="primary" onClick={send} aria-label="Send">
+              <SendIcon />
+            </IconButton>
+          </Box>
         </Box>
       </Box>
     </Box>
   );
 }
 
-/* ---------- Setlist (MVP) ---------- */
-function SetlistTab({ eventId }: { eventId: string }) {
-  const sb = useMemo(() => supabaseBrowser(), []);
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState('');
+// /* ---------- Setlist (MVP) ---------- */
+// function SetlistTab({ eventId }: { eventId: string }) {
+//   const sb = useMemo(() => supabaseBrowser(), []);
+//   const [items, setItems] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [title, setTitle] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      const { data } = await sb
-        .from('event_setlist_items')
-        .select('id, title, position, notes, created_at')
-        .eq('event_id', eventId)
-        .order('position', { ascending: true });
-      if (!alive) return;
-      setItems(data ?? []);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [sb, eventId]);
+//   useEffect(() => {
+//     let alive = true;
+//     (async () => {
+//       setLoading(true);
+//       const { data } = await sb
+//         .from('event_setlist_items')
+//         .select('id, title, position, notes, created_at')
+//         .eq('event_id', eventId)
+//         .order('position', { ascending: true });
+//       if (!alive) return;
+//       setItems(data ?? []);
+//       setLoading(false);
+//     })();
+//     return () => {
+//       alive = false;
+//     };
+//   }, [sb, eventId]);
 
-  useEffect(() => {
-    const ch = sb
-      .channel(`setlist:${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'event_setlist_items',
-          filter: `event_id=eq.${eventId}`,
-        },
-        () => {
-          sb.from('event_setlist_items')
-            .select('id, title, position, notes, created_at')
-            .eq('event_id', eventId)
-            .order('position', { ascending: true })
-            .then(({ data }) => setItems(data ?? []));
-        }
-      )
-      .subscribe();
-    return () => {
-      sb.removeChannel(ch);
-    };
-  }, [sb, eventId]);
+//   useEffect(() => {
+//     const ch = sb
+//       .channel(`setlist:${eventId}`)
+//       .on(
+//         'postgres_changes',
+//         {
+//           event: '*',
+//           schema: 'public',
+//           table: 'event_setlist_items',
+//           filter: `event_id=eq.${eventId}`,
+//         },
+//         () => {
+//           sb.from('event_setlist_items')
+//             .select('id, title, position, notes, created_at')
+//             .eq('event_id', eventId)
+//             .order('position', { ascending: true })
+//             .then(({ data }) => setItems(data ?? []));
+//         }
+//       )
+//       .subscribe();
+//     return () => {
+//       sb.removeChannel(ch);
+//     };
+//   }, [sb, eventId]);
 
-  const addItem = useCallback(async () => {
-    const t = title.trim();
-    if (!t) return;
-    setTitle('');
-    await sb.from('event_setlist_items').insert({
-      event_id: eventId,
-      title: t,
-      position: (items.at(-1)?.position ?? 0) + 10,
-    });
-  }, [sb, eventId, title, items]);
+//   const addItem = useCallback(async () => {
+//     const t = title.trim();
+//     if (!t) return;
+//     setTitle('');
+//     await sb.from('event_setlist_items').insert({
+//       event_id: eventId,
+//       title: t,
+//       position: (items.at(-1)?.position ?? 0) + 10,
+//     });
+//   }, [sb, eventId, title, items]);
 
-  const move = useCallback(
-    async (id: string, dir: -1 | 1) => {
-      const idx = items.findIndex((i) => i.id === id);
-      const swapIdx = idx + dir;
-      if (idx < 0 || swapIdx < 0 || swapIdx >= items.length) return;
-      const a = items[idx],
-        b = items[swapIdx];
-      await sb
-        .from('event_setlist_items')
-        .update({ position: b.position })
-        .eq('id', a.id);
-      await sb
-        .from('event_setlist_items')
-        .update({ position: a.position })
-        .eq('id', b.id);
-    },
-    [items, sb]
-  );
+//   const move = useCallback(
+//     async (id: string, dir: -1 | 1) => {
+//       const idx = items.findIndex((i) => i.id === id);
+//       const swapIdx = idx + dir;
+//       if (idx < 0 || swapIdx < 0 || swapIdx >= items.length) return;
+//       const a = items[idx],
+//         b = items[swapIdx];
+//       await sb
+//         .from('event_setlist_items')
+//         .update({ position: b.position })
+//         .eq('id', a.id);
+//       await sb
+//         .from('event_setlist_items')
+//         .update({ position: a.position })
+//         .eq('id', b.id);
+//     },
+//     [items, sb]
+//   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      await sb.from('event_setlist_items').delete().eq('id', id);
-    },
-    [sb]
-  );
+//   const remove = useCallback(
+//     async (id: string) => {
+//       await sb.from('event_setlist_items').delete().eq('id', id);
+//     },
+//     [sb]
+//   );
 
-  return (
-    <Stack gap={1.25} sx={{ mt: 1 }}>
-      <Stack direction="row" gap={1}>
-        <TextField
-          fullWidth
-          size="small"
-          label="Add song"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') addItem();
-          }}
-          InputLabelProps={{ shrink: true }}
-          InputProps={{ sx: { bgcolor: '#11131a', color: 'white' } }}
-        />
-        <Button variant="contained" onClick={addItem} startIcon={<AddIcon />}>
-          Add
-        </Button>
-      </Stack>
+//   return (
+//     <Stack gap={1.25} sx={{ mt: 1 }}>
+//       <Stack direction="row" gap={1}>
+//         <TextField
+//           fullWidth
+//           size="small"
+//           label="Add song"
+//           value={title}
+//           onChange={(e) => setTitle(e.target.value)}
+//           onKeyDown={(e) => {
+//             if (e.key === 'Enter') addItem();
+//           }}
+//           InputLabelProps={{ shrink: true }}
+//           InputProps={{ sx: { bgcolor: '#11131a', color: 'white' } }}
+//         />
+//         <Button variant="contained" onClick={addItem} startIcon={<AddIcon />}>
+//           Add
+//         </Button>
+//       </Stack>
 
-      {loading ? (
-        <Typography color="text.secondary">Loading setlist…</Typography>
-      ) : items.length === 0 ? (
-        <Typography color="text.secondary">
-          No setlist yet. Add your first song.
-        </Typography>
-      ) : (
-        <Stack gap={1.25}>
-          {items.map((it, i) => (
-            <Paper
-              key={it.id}
-              variant="outlined"
-              sx={(t) => ({
-                p: 1,
-                borderRadius: 2,
-                borderColor: alpha(t.palette.primary.main, 0.14),
-                background:
-                  'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
-              })}
-            >
-              <Stack direction="row" alignItems="center" gap={1}>
-                <Typography
-                  sx={{ fontWeight: 800, flex: 1, minWidth: 0 }}
-                  noWrap
-                >
-                  {i + 1}. {it.title}
-                </Typography>
-                <IconButton
-                  size="small"
-                  onClick={() => move(it.id, -1)}
-                  disabled={i === 0}
-                >
-                  <ArrowUpwardIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => move(it.id, +1)}
-                  disabled={i === items.length - 1}
-                >
-                  <ArrowDownwardIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" onClick={() => remove(it.id)}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Stack>
-              {it.notes && (
-                <>
-                  <Divider sx={{ my: 0.75, opacity: 0.08 }} />
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    {it.notes}
-                  </Typography>
-                </>
-              )}
-            </Paper>
-          ))}
-        </Stack>
-      )}
-    </Stack>
-  );
-}
+//       {loading ? (
+//         <Typography color="text.secondary">Loading setlist…</Typography>
+//       ) : items.length === 0 ? (
+//         <Typography color="text.secondary">
+//           No setlist yet. Add your first song.
+//         </Typography>
+//       ) : (
+//         <Stack gap={1.25}>
+//           {items.map((it, i) => (
+//             <Paper
+//               key={it.id}
+//               variant="outlined"
+//               sx={(t) => ({
+//                 p: 1,
+//                 borderRadius: 2,
+//                 borderColor: alpha(t.palette.primary.main, 0.14),
+//                 background:
+//                   'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
+//               })}
+//             >
+//               <Stack direction="row" alignItems="center" gap={1}>
+//                 <Typography
+//                   sx={{ fontWeight: 800, flex: 1, minWidth: 0 }}
+//                   noWrap
+//                 >
+//                   {i + 1}. {it.title}
+//                 </Typography>
+//                 <IconButton
+//                   size="small"
+//                   onClick={() => move(it.id, -1)}
+//                   disabled={i === 0}
+//                 >
+//                   <ArrowUpwardIcon fontSize="small" />
+//                 </IconButton>
+//                 <IconButton
+//                   size="small"
+//                   onClick={() => move(it.id, +1)}
+//                   disabled={i === items.length - 1}
+//                 >
+//                   <ArrowDownwardIcon fontSize="small" />
+//                 </IconButton>
+//                 <IconButton size="small" onClick={() => remove(it.id)}>
+//                   <DeleteOutlineIcon fontSize="small" />
+//                 </IconButton>
+//               </Stack>
+//               {it.notes && (
+//                 <>
+//                   <Divider sx={{ my: 0.75, opacity: 0.08 }} />
+//                   <Typography variant="body2" sx={{ opacity: 0.9 }}>
+//                     {it.notes}
+//                   </Typography>
+//                 </>
+//               )}
+//             </Paper>
+//           ))}
+//         </Stack>
+//       )}
+//     </Stack>
+//   );
+// }
 
-/* ---------- Notes (autosave) ---------- */
-function NotesTab({ eventId }: { eventId: string }) {
-  const sb = useMemo(() => supabaseBrowser(), []);
-  const [body, setBody] = useState('');
-  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+// /* ---------- Notes (autosave) ---------- */
+// function NotesTab({ eventId }: { eventId: string }) {
+//   const sb = useMemo(() => supabaseBrowser(), []);
+//   const [body, setBody] = useState('');
+//   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+//   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const { data } = await sb
-        .from('event_notes')
-        .select('body')
-        .eq('event_id', eventId)
-        .maybeSingle();
-      if (!alive) return;
-      setBody(data?.body ?? '');
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [sb, eventId]);
+//   useEffect(() => {
+//     let alive = true;
+//     (async () => {
+//       const { data } = await sb
+//         .from('event_notes')
+//         .select('body')
+//         .eq('event_id', eventId)
+//         .maybeSingle();
+//       if (!alive) return;
+//       setBody(data?.body ?? '');
+//     })();
+//     return () => {
+//       alive = false;
+//     };
+//   }, [sb, eventId]);
 
-  const save = useCallback(
-    async (next: string) => {
-      setSaving('saving');
-      await sb.from('event_notes').upsert({ event_id: eventId, body: next });
-      setSaving('saved');
-      setTimeout(() => setSaving('idle'), 800);
-    },
-    [sb, eventId]
-  );
+//   const save = useCallback(
+//     async (next: string) => {
+//       setSaving('saving');
+//       await sb.from('event_notes').upsert({ event_id: eventId, body: next });
+//       setSaving('saved');
+//       setTimeout(() => setSaving('idle'), 800);
+//     },
+//     [sb, eventId]
+//   );
 
-  const onChange = (v: string) => {
-    setBody(v);
-    setSaving('saving');
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => save(v), 600);
-  };
+//   const onChange = (v: string) => {
+//     setBody(v);
+//     setSaving('saving');
+//     if (timer.current) clearTimeout(timer.current);
+//     timer.current = setTimeout(() => save(v), 600);
+//   };
 
-  return (
-    <Stack gap={1.25} sx={{ mt: 1 }}>
-      <TextField
-        multiline
-        minRows={6}
-        fullWidth
-        placeholder="Shared notes for this event…"
-        value={body}
-        onChange={(e) => onChange(e.target.value)}
-        InputProps={{ sx: { bgcolor: '#11131a', color: 'white' } }}
-      />
-      <Typography variant="caption" sx={{ opacity: 0.7 }}>
-        {saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ' '}
-      </Typography>
-    </Stack>
-  );
-}
+//   return (
+//     <Stack gap={1.25} sx={{ mt: 1 }}>
+//       <TextField
+//         multiline
+//         minRows={6}
+//         fullWidth
+//         placeholder="Shared notes for this event…"
+//         value={body}
+//         onChange={(e) => onChange(e.target.value)}
+//         InputProps={{ sx: { bgcolor: '#11131a', color: 'white' } }}
+//       />
+//       <Typography variant="caption" sx={{ opacity: 0.7 }}>
+//         {saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ' '}
+//       </Typography>
+//     </Stack>
+//   );
+// }
 
-/* ---------- Files (private storage: event-files bucket) ---------- */
-function FilesTab({ eventId }: { eventId: string }) {
-  const sb = useMemo(() => supabaseBrowser(), []);
-  const [paths, setPaths] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+// /* ---------- Files (private storage: event-files bucket) ---------- */
+// function FilesTab({ eventId }: { eventId: string }) {
+//   const sb = useMemo(() => supabaseBrowser(), []);
+//   const [paths, setPaths] = useState<string[]>([]);
+//   const [loading, setLoading] = useState(true);
 
-  const list = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await sb.storage
-      .from('event-files')
-      .list(eventId, { limit: 100, offset: 0 });
-    if (!error) setPaths((data ?? []).map((o) => `${eventId}/${o.name}`));
-    setLoading(false);
-  }, [sb, eventId]);
+//   const list = useCallback(async () => {
+//     setLoading(true);
+//     const { data, error } = await sb.storage
+//       .from('event-files')
+//       .list(eventId, { limit: 100, offset: 0 });
+//     if (!error) setPaths((data ?? []).map((o) => `${eventId}/${o.name}`));
+//     setLoading(false);
+//   }, [sb, eventId]);
 
-  useEffect(() => {
-    list();
-  }, [list]);
+//   useEffect(() => {
+//     list();
+//   }, [list]);
 
-  const onUpload = async (file: File) => {
-    const path = `${eventId}/${crypto.randomUUID()}.${
-      file.name.split('.').pop() ?? 'dat'
-    }`;
-    const { error } = await sb.storage
-      .from('event-files')
-      .upload(path, file, { upsert: true });
-    if (!error) list();
-  };
+//   const onUpload = async (file: File) => {
+//     const path = `${eventId}/${crypto.randomUUID()}.${
+//       file.name.split('.').pop() ?? 'dat'
+//     }`;
+//     const { error } = await sb.storage
+//       .from('event-files')
+//       .upload(path, file, { upsert: true });
+//     if (!error) list();
+//   };
 
-  const downloadUrl = async (path: string) => {
-    const { data, error } = await sb.storage
-      .from('event-files')
-      .createSignedUrl(path, 60 * 60);
-    if (!error && data?.signedUrl)
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
-  };
+//   const downloadUrl = async (path: string) => {
+//     const { data, error } = await sb.storage
+//       .from('event-files')
+//       .createSignedUrl(path, 60 * 60);
+//     if (!error && data?.signedUrl)
+//       window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+//   };
 
-  return (
-    <Stack gap={1.25} sx={{ mt: 1 }}>
-      <Button
-        variant="outlined"
-        component="label"
-        sx={{ alignSelf: 'flex-start' }}
-      >
-        Upload file
-        <input
-          hidden
-          type="file"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onUpload(f);
-            (e.currentTarget as HTMLInputElement).value = '';
-          }}
-        />
-      </Button>
+//   return (
+//     <Stack gap={1.25} sx={{ mt: 1 }}>
+//       <Button
+//         variant="outlined"
+//         component="label"
+//         sx={{ alignSelf: 'flex-start' }}
+//       >
+//         Upload file
+//         <input
+//           hidden
+//           type="file"
+//           onChange={(e) => {
+//             const f = e.target.files?.[0];
+//             if (f) onUpload(f);
+//             (e.currentTarget as HTMLInputElement).value = '';
+//           }}
+//         />
+//       </Button>
 
-      {loading ? (
-        <Typography color="text.secondary">Loading files…</Typography>
-      ) : paths.length === 0 ? (
-        <Typography color="text.secondary">No files yet.</Typography>
-      ) : (
-        <Stack gap={1}>
-          {paths.map((p) => (
-            <Paper
-              key={p}
-              variant="outlined"
-              sx={(t) => ({
-                p: 1,
-                borderRadius: 2,
-                borderColor: alpha(t.palette.primary.main, 0.14),
-                background:
-                  'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              })}
-            >
-              <Typography sx={{ wordBreak: 'break-all' }}>
-                {p.split('/').slice(1).join('/')}
-              </Typography>
-              <Button size="small" onClick={() => downloadUrl(p)}>
-                Open
-              </Button>
-            </Paper>
-          ))}
-        </Stack>
-      )}
-    </Stack>
-  );
-}
+//       {loading ? (
+//         <Typography color="text.secondary">Loading files…</Typography>
+//       ) : paths.length === 0 ? (
+//         <Typography color="text.secondary">No files yet.</Typography>
+//       ) : (
+//         <Stack gap={1}>
+//           {paths.map((p) => (
+//             <Paper
+//               key={p}
+//               variant="outlined"
+//               sx={(t) => ({
+//                 p: 1,
+//                 borderRadius: 2,
+//                 borderColor: alpha(t.palette.primary.main, 0.14),
+//                 background:
+//                   'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
+//                 display: 'flex',
+//                 justifyContent: 'space-between',
+//                 alignItems: 'center',
+//               })}
+//             >
+//               <Typography sx={{ wordBreak: 'break-all' }}>
+//                 {p.split('/').slice(1).join('/')}
+//               </Typography>
+//               <Button size="small" onClick={() => downloadUrl(p)}>
+//                 Open
+//               </Button>
+//             </Paper>
+//           ))}
+//         </Stack>
+//       )}
+//     </Stack>
+//   );
+// }

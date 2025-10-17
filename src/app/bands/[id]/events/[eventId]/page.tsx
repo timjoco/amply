@@ -2,12 +2,13 @@ import { createClient } from '@/utils/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import EventSheet from './EventSheet';
 
-export default async function EventPage({
-  params,
-}: {
-  params: { id: string; eventId: string };
-}) {
-  const { id: bandId, eventId } = params;
+type Params = { id: string; eventId: string };
+
+export default async function EventPage(
+  { params }: { params: Promise<Params> } // 👈 note Promise<...>
+) {
+  const { id: bandId, eventId } = await params; // 👈 await before use
+
   const supabase = createClient();
 
   const {

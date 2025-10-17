@@ -28,7 +28,6 @@ export default function BandEventsList({
   bandId,
 }: {
   bandId: string;
-  /** Hide the "New Event" button if you're showing your own trigger elsewhere */
   showCreate?: boolean;
 }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -112,24 +111,6 @@ export default function BandEventsList({
 
   return (
     <Stack gap={1.5}>
-      {/* <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography variant="h6" fontWeight={800}>
-          Events
-        </Typography>
-        {showCreate && (
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() =>
-              window.dispatchEvent(new CustomEvent('global-create:open'))
-            }
-          >
-            New Event
-          </Button>
-        )}
-      </Stack> */}
-
       {loading && (
         <Stack direction="row" gap={1} alignItems="center">
           <CircularProgress size={18} />
