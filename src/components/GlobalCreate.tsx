@@ -152,6 +152,29 @@ export default function GlobalCreate({
     resetError: resetCreateBandError,
   } = useCreateBand();
 
+  // add near the top of GlobalCreate()
+
+  // --- SSR-safe mobile check ---
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // --- Auth state (default to logged OUT to avoid flashing UI) ---
+  const [authed, setAuthed] = useState(false);
+  useEffect(() => {
+    const sb = supabaseBrowser();
+
+    // Prime from current session
+    sb.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+
+    // Keep in sync
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_e, session) => setAuthed(!!session));
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const allowTrigger = mounted && authed && isMobile;
   // URL.createObjectURL cleanup
   useEffect(() => {
     return () => {
@@ -331,8 +354,9 @@ export default function GlobalCreate({
     };
   }, [setOpen]);
 
-  // Trigger element
   const TriggerEl = useMemo(() => {
+    if (!allowTrigger || trigger === 'none') return null;
+
     if (trigger === 'button') {
       return (
         <Button
@@ -346,6 +370,7 @@ export default function GlobalCreate({
         </Button>
       );
     }
+
     if (trigger === 'icon') {
       return (
         <Tooltip title="Create">
@@ -362,8 +387,9 @@ export default function GlobalCreate({
         </Tooltip>
       );
     }
+
     return null;
-  }, [trigger, isMobile, setOpen]);
+  }, [allowTrigger, trigger, isMobile, setOpen]);
 
   return (
     <>

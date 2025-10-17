@@ -52,7 +52,7 @@ export default function HeaderPublic() {
           component={Link}
           href="/login"
           variant="contained"
-          color="secondary"
+          color="primary"
           disableElevation
           sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
         >
