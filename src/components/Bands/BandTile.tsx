@@ -20,9 +20,7 @@ type Props = {
   id: string;
   name: string;
   bandRole?: MembershipRole;
-  /** Storage path like "bandId/uuid.jpg" (NO leading slash) */
   avatarPath?: string | undefined;
-  /** Optional direct URL(s) if you ever pass them */
   avatarUrl?: string | undefined;
   avatar_url?: string | undefined;
   size?: number;
@@ -46,7 +44,6 @@ export default function BandTile({
 
   const neon = (t: any) => t.palette?.secondary?.main ?? '#8B5CF6';
 
-  // Sign the storage path when using a private bucket
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -56,7 +53,6 @@ export default function BandTile({
         return;
       }
 
-      // Defensive: ensure we're passing a *path*, not a full URL
       const looksLikeUrl = /^https?:\/\//i.test(avatarPath);
       if (looksLikeUrl) {
         console.warn(
@@ -90,7 +86,6 @@ export default function BandTile({
     };
   }, [avatarPath]);
 
-  // Prefer explicit URL if provided; else use signed URL from path
   const src: string | undefined =
     avatarUrl ?? avatar_url ?? signedUrl ?? undefined;
 
@@ -131,7 +126,7 @@ export default function BandTile({
       >
         <CardContent
           sx={{
-            p: 1.25,
+            p: 2,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -143,15 +138,15 @@ export default function BandTile({
           {/* Top: logo/initials */}
           <Box sx={{ flex: 1, display: 'grid', placeItems: 'center' }}>
             <Avatar
-              src={src} // must be string | undefined (never null)
+              src={src}
               alt={name}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement & { src?: string }).src =
                   '';
               }}
               sx={{
-                width: { xs: 64, sm: 72, md: 84 },
-                height: { xs: 64, sm: 72, md: 84 },
+                width: { xs: 82, sm: 98, md: 100 },
+                height: { xs: 82, sm: 98, md: 100 },
                 fontWeight: 800,
                 letterSpacing: 0.5,
                 bgcolor: (theme) => alpha(theme.palette.common.white, 0.06),

@@ -34,10 +34,10 @@ type Props = {
   bandId: string;
   bandName?: string;
   onInvite?: () => void;
-  /** Admins see Invite + Settings; members see Leave */
   isAdmin?: boolean;
 };
 
+// This is the drop down menu when clicking a band name (desktop) or the popup on mobile
 export default function BandTitleMenu({
   bandId,
   bandName,

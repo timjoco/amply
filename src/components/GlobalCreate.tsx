@@ -1,16 +1,15 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 'use client';
 
 import { useCreateBand } from '@/hooks/useCreateBand';
 import { createEvent, type EventType } from '@/lib/events/createEvent';
 import { supabaseBrowser } from '@/lib/supabaseClient';
-import theme from '@/theme';
+
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+
 import {
   Alert,
   Autocomplete,
@@ -30,13 +29,10 @@ import {
   TextField,
   Tooltip,
   useMediaQuery,
+  useTheme,
 } from '@mui/material';
-
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-const blurActive = () =>
-  (document.activeElement as HTMLElement | null)?.blur?.();
 
 type Trigger = 'icon' | 'button' | 'none';
 type BandLite = { id: string; name: string; avatar_url?: string | null };
@@ -45,12 +41,14 @@ export type GlobalCreateProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   trigger?: Trigger;
-  onBandCreated?: (band: {
-    id: string;
-    name: string;
-    avatar_url?: string | null;
-  }) => void;
+  onBandCreated?: (band: BandLite) => void;
 };
+
+const CONTENT_PX = 3;
+
+// ---------- Helpers ----------
+const blurActive = () =>
+  (document.activeElement as HTMLElement | null)?.blur?.();
 
 function errMsg(e: unknown) {
   if (typeof e === 'string') return e;
@@ -59,7 +57,19 @@ function errMsg(e: unknown) {
   return 'Something went wrong';
 }
 
-/** Merge server results into current list (keeps optimistic items; stable by name). */
+function normalizeCreateEventError(e: any): string {
+  const msg = String(e?.message ?? e ?? '');
+  const code = e?.code ?? e?.status;
+  if (code === '42501' || /row[- ]level security/i.test(msg)) {
+    return "You don't have permission to create events for this band.";
+  }
+  if (code === 401 || code === 403) {
+    return "You're not allowed to create events for this band.";
+  }
+  return 'Could not create the event. Please try again.';
+}
+
+/** Merge server results into current list (stable by id, sorted by name). */
 function mergeLocalBands(
   current: BandLite[],
   incoming: BandLite[]
@@ -73,6 +83,18 @@ function mergeLocalBands(
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Map PostgREST rows → BandLite (tolerant to missing nested bands). */
+function mapBands(rows: any[] | null | undefined): BandLite[] {
+  return (rows ?? [])
+    .map((r: any) => r?.bands)
+    .filter(Boolean)
+    .map((b: any) => ({
+      id: String(b.id),
+      name: String(b.name),
+      avatar_url: b.avatar_url ?? null,
+    }));
+}
+
 export default function GlobalCreate({
   open: openProp,
   onOpenChange,
@@ -80,9 +102,11 @@ export default function GlobalCreate({
   onBandCreated,
 }: GlobalCreateProps) {
   const router = useRouter();
+  const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const pathname = usePathname();
 
-  // Controlled/uncontrolled open handling
+  // controlled/uncontrolled
   const isControlled = typeof openProp === 'boolean';
   const [openUncontrolled, setOpenUncontrolled] = useState(false);
   const open = isControlled ? (openProp as boolean) : openUncontrolled;
@@ -94,27 +118,25 @@ export default function GlobalCreate({
     [isControlled, onOpenChange]
   );
 
+  // errors
   const [error, setError] = useState<string | null>(null);
 
-  // Bands for “New Event”
+  // bands for “New Event”
   const [bands, setBands] = useState<BandLite[]>([]);
   const [loadingBands, setLoadingBands] = useState(false);
-  const hasBands = bands.length > 0;
 
-  // Event selection
+  // event band selection
   const [eventBand, setEventBand] = useState<BandLite | null>(null);
 
-  // New band form
+  // new band form
   const [bandName, setBandName] = useState('');
-
-  // Optional avatar during creation
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  const CONTENT_PX = 3;
+  // wizard step
   const [step, setStep] = useState<'menu' | 'newBand' | 'newEvent'>('menu');
 
-  // New Event form state
+  // new event fields
   const [eventTitle, setEventTitle] = useState('');
   const [eventType, setEventType] = useState<EventType>('show');
   const [eventStarts, setEventStarts] = useState<string>('');
@@ -122,25 +144,35 @@ export default function GlobalCreate({
   const [eventLocation, setEventLocation] = useState('');
   const [creatingEvent, setCreatingEvent] = useState(false);
 
-  const pathname = usePathname();
-
-  // Hook: create band via service (trigger handles admin membership)
+  // useCreateBand hook
   const {
-    createBand: createBandWithHook, // ← alias to avoid collision
+    createBand: createBandWithHook,
     loading: creatingBand,
     error: createBandError,
-    resetError: resetCreateBandError, // ← alias resetError
+    resetError: resetCreateBandError,
   } = useCreateBand();
+
+  // URL.createObjectURL cleanup
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
+
+  const closeDialog = useCallback(() => {
+    blurActive();
+    setOpen(false);
+  }, [setOpen]);
 
   const resetAll = useCallback(() => {
     setStep('menu');
     setError(null);
-    resetCreateBandError?.(); // ← use the alias
+    resetCreateBandError?.();
 
     setBandName('');
-    setAvatarFile(null);
     if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     setAvatarPreview(null);
+    setAvatarFile(null);
 
     setEventBand(null);
     setEventTitle('');
@@ -149,6 +181,53 @@ export default function GlobalCreate({
     setEventEnds('');
     setEventLocation('');
   }, [avatarPreview, resetCreateBandError]);
+
+  // re-init on route change (don’t force-close)
+  const prevPathRef = useRef(pathname);
+  useEffect(() => {
+    if (pathname !== prevPathRef.current) {
+      prevPathRef.current = pathname;
+      resetAll();
+    }
+  }, [pathname, resetAll]);
+
+  // pick avatar
+  const onPickAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return alert('Please choose an image.');
+    if (f.size > 3 * 1024 * 1024) return alert('Max size is 3MB.');
+
+    setAvatarPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setAvatarFile(f);
+    setAvatarPreview(URL.createObjectURL(f));
+    // allow picking same file twice
+    e.currentTarget.value = '';
+  };
+
+  // fetch bands (reused)
+  const fetchBands = useCallback(async () => {
+    const sb = supabaseBrowser();
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return { rows: [], merged: [] as BandLite[] };
+
+    const { data: rows, error } = await sb
+      // NOTE: keep this table name consistent with your schema.
+      .from('band_members')
+      .select('role, bands(id, name, avatar_url)')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    const mapped = mapBands(rows);
+    const merged = mergeLocalBands([], mapped);
+    return { rows, merged };
+  }, []);
 
   // Load bands when dialog opens
   useEffect(() => {
@@ -171,8 +250,6 @@ export default function GlobalCreate({
           router.replace('/login?next=/dashboard');
           return;
         }
-
-        // Best-effort profile ensure (ignore “function not found”)
         try {
           const { error: rpcErr } = await sb.rpc('ensure_profile');
           if (rpcErr && rpcErr.code !== '42883') {
@@ -180,22 +257,8 @@ export default function GlobalCreate({
           }
         } catch {}
 
-        const { data: rows, error: mErr } = await sb
-          .from('band_members')
-          .select('role, bands(id, name, avatar_url)')
-          .eq('user_id', user.id);
-        if (mErr) throw mErr;
-
-        const mapped: BandLite[] = (rows ?? [])
-          .map((r: any) => r?.bands)
-          .filter(Boolean)
-          .map((b: any) => ({
-            id: String(b.id),
-            name: String(b.name),
-            avatar_url: b.avatar_url ?? null,
-          }));
-
-        if (mounted) setBands((prev) => mergeLocalBands(prev, mapped));
+        const { merged } = await fetchBands();
+        if (mounted) setBands(merged);
       } catch (e) {
         if (!mounted) return;
         console.error(e);
@@ -213,63 +276,9 @@ export default function GlobalCreate({
       mounted = false;
       sub?.subscription?.unsubscribe?.();
     };
-  }, [open, router, setOpen]);
+  }, [open, router, setOpen, fetchBands]);
 
-  // Global open/close events (SideNav/BottomNav)
-  useEffect(() => {
-    const openHandler = () => setOpen(true);
-    const closeHandler = () => setOpen(false);
-    window.addEventListener('global-create:open', openHandler);
-    window.addEventListener('global-create:close', closeHandler);
-    return () => {
-      window.removeEventListener('global-create:open', openHandler);
-      window.removeEventListener('global-create:close', closeHandler);
-    };
-  }, [setOpen]);
-
-  const refreshBandsLocal = useCallback(async () => {
-    const sb = supabaseBrowser();
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    if (!user) return;
-
-    const { data: rows, error } = await sb
-      .from('band_members')
-      .select('role, bands(id, name, avatar_url)')
-      .eq('user_id', user.id);
-    if (error) throw error;
-
-    const mapped: BandLite[] = (rows ?? [])
-      .map((r: any) => r?.bands)
-      .filter(Boolean)
-      .map((b: any) => ({
-        id: String(b.id),
-        name: String(b.name),
-        avatar_url: b.avatar_url ?? null,
-      }));
-
-    setBands((prev) => mergeLocalBands(prev, mapped));
-  }, []);
-
-  // File pick handler
-  function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    if (!f) return;
-    if (!f.type.startsWith('image/')) return alert('Please choose an image.');
-    if (f.size > 3 * 1024 * 1024) return alert('Max size is 3MB.');
-
-    // revoke old preview URL to avoid leaks
-    setAvatarPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return prev;
-    });
-
-    setAvatarFile(f);
-    setAvatarPreview(URL.createObjectURL(f));
-  }
-
-  // Submit handler using the hook (NO manual band_members insert)
+  // Create band (hook)
   const onSubmitCreate = useCallback(async () => {
     const name = bandName.trim();
     if (!name) return;
@@ -281,7 +290,7 @@ export default function GlobalCreate({
       const created = await createBandWithHook({ name, avatarFile });
       if (!created?.id) throw new Error('Could not create band');
 
-      // Optimistic merge for the menu list (optional)
+      // update local list quickly
       setBands((prev) =>
         mergeLocalBands(prev, [
           {
@@ -292,32 +301,37 @@ export default function GlobalCreate({
         ])
       );
 
-      // Broadcast (optional)
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('bands:created', { detail: created })
-        );
-      }
+      onBandCreated?.(created);
 
-      // Close and go to the new band
-      setOpen(false);
+      closeDialog();
       router.push(`/bands/${created.id}`);
     } catch (e) {
       console.error('[GlobalCreate:onSubmitCreate]', e);
       setError(errMsg(e) || 'Could not create band');
     }
-    // ✅ only the things actually used in the function
   }, [
     bandName,
     avatarFile,
     createBandWithHook,
     resetCreateBandError,
-    setBands,
-    setOpen,
+    onBandCreated,
+    closeDialog,
     router,
   ]);
 
-  // Optional trigger button (icon/button/none)
+  // Global open/close events (SideNav/BottomNav triggers)
+  useEffect(() => {
+    const openHandler = () => setOpen(true);
+    const closeHandler = () => setOpen(false);
+    window.addEventListener('global-create:open', openHandler);
+    window.addEventListener('global-create:close', closeHandler);
+    return () => {
+      window.removeEventListener('global-create:open', openHandler);
+      window.removeEventListener('global-create:close', closeHandler);
+    };
+  }, [setOpen]);
+
+  // Trigger element
   const TriggerEl = useMemo(() => {
     if (trigger === 'button') {
       return (
@@ -351,22 +365,13 @@ export default function GlobalCreate({
     return null;
   }, [trigger, isMobile, setOpen]);
 
-  const prevPathRef = useRef(pathname);
-  useEffect(() => {
-    if (pathname !== prevPathRef.current) {
-      prevPathRef.current = pathname;
-      // Just reset the wizard state; don't call setOpen(false) here.
-      resetAll();
-    }
-  }, [pathname, resetAll]);
-
   return (
     <>
       {TriggerEl}
 
       <Dialog
         open={open}
-        onClose={(_, __) => {
+        onClose={() => {
           blurActive();
           setOpen(false);
         }}
@@ -383,14 +388,7 @@ export default function GlobalCreate({
                 ? 'Create Band'
                 : 'Create Event'}
             </Stack>
-            <IconButton
-              aria-label="Close"
-              edge="end"
-              onClick={() => {
-                blurActive();
-                setOpen(false);
-              }}
-            >
+            <IconButton aria-label="Close" edge="end" onClick={closeDialog}>
               <CloseIcon />
             </IconButton>
           </Stack>
@@ -405,7 +403,6 @@ export default function GlobalCreate({
 
           {step === 'menu' ? (
             <Stack gap={1.25}>
-              {/* New Band */}
               <List disablePadding sx={{ borderRadius: 1 }}>
                 <ListItemButton
                   onClick={() => setStep('newBand')}
@@ -423,12 +420,11 @@ export default function GlobalCreate({
 
               <Divider sx={{ my: 1 }} />
 
-              {/* New Event */}
               <List disablePadding sx={{ borderRadius: 1 }}>
                 <ListItemButton
                   onClick={() => setStep('newEvent')}
                   sx={{ px: 0 }}
-                  disabled={!hasBands}
+                  disabled={!bands.length}
                 >
                   <ListItemIcon sx={{ minWidth: 36 }}>
                     <ScheduleIcon sx={{ opacity: 0.9 }} />
@@ -436,7 +432,7 @@ export default function GlobalCreate({
                   <ListItemText
                     primary="New Event"
                     secondary={
-                      hasBands
+                      bands.length
                         ? 'Create a show or practice'
                         : 'Create a band first'
                     }
@@ -458,7 +454,6 @@ export default function GlobalCreate({
                 }}
               />
 
-              {/* Optional avatar picker */}
               <Stack direction="row" alignItems="center" gap={2}>
                 <Avatar
                   src={avatarPreview || undefined}
@@ -474,10 +469,7 @@ export default function GlobalCreate({
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    onChange={(e) => {
-                      onPickAvatar(e);
-                      (e.currentTarget as HTMLInputElement).value = '';
-                    }}
+                    onChange={onPickAvatar}
                   />
                 </Button>
               </Stack>
@@ -487,9 +479,10 @@ export default function GlobalCreate({
                   variant="outlined"
                   onClick={() => {
                     setError(null);
-                    resetCreateBandError();
+                    resetCreateBandError?.();
                     setBandName('');
                     setAvatarFile(null);
+                    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
                     setAvatarPreview(null);
                     setStep('menu');
                   }}
@@ -510,11 +503,11 @@ export default function GlobalCreate({
               </Stack>
             </Stack>
           ) : (
-            /* step === 'newEvent' */
+            // step === 'newEvent'
             <Stack gap={1.25}>
               <Autocomplete
                 autoFocus
-                disabled={!hasBands}
+                disabled={!bands.length}
                 loading={loadingBands}
                 value={eventBand}
                 onChange={(_, v) => setEventBand(v)}
@@ -611,11 +604,10 @@ export default function GlobalCreate({
                         location: eventLocation || null,
                       });
 
-                      setOpen(false);
+                      closeDialog();
                       router.push(`/bands/${eventBand!.id}/events/${id}`);
                     } catch (e: any) {
-                      console.error('[Create Event]', e);
-                      setError(e?.message ?? 'Could not create event');
+                      setError(normalizeCreateEventError(e));
                     } finally {
                       setCreatingEvent(false);
                     }

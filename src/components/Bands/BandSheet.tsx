@@ -157,9 +157,7 @@ export default function BandSheet({ bandId }: Props) {
     }
   }, [sb, bandId]);
 
-  /**
-   * Initial load: auth + role + band + roster + invites
-   */
+  /* Initial load: auth + role + band + roster + invites */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -222,9 +220,6 @@ export default function BandSheet({ bandId }: Props) {
     };
   }, [sb, bandId, fetchRoster]);
 
-  /**
-   * Open Invite dialog via ?openInvite=1, then clean URL
-   */
   useEffect(() => {
     const sp = searchParams;
     if (!sp) return;
@@ -241,9 +236,6 @@ export default function BandSheet({ bandId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  /**
-   * Realtime: refresh when memberships or invitations change for this band
-   */
   useEffect(() => {
     const channel = sb
       .channel(`band:${bandId}`)
@@ -464,8 +456,6 @@ export default function BandSheet({ bandId }: Props) {
                 {m.profile?.email ?? ''}
               </Typography>
               <Box sx={{ flex: 1 }} />
-              {/* This will need to be changed to band role!! */}
-              {/* <RolePill role={m.role} size="small" /> */}
             </Stack>
           ))}
 
@@ -504,6 +494,7 @@ export default function BandSheet({ bandId }: Props) {
         onClose={() => setInviteOpen(false)}
         fullWidth
         maxWidth="xs"
+        disableRestoreFocus
         PaperProps={{
           sx: (t) => ({
             borderRadius: 3,
